@@ -1,289 +1,164 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
-
-// Firebase 설정 및 초기화
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'forest-walk-notion';
-
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [lines, setLines] = useState([]);
-  const [currentText, setCurrentText] = useState("");
-  const [goal, setGoal] = useState(500);
-  const [fontSize, setFontSize] = useState(1.1);
-  const [isStarted, setIsStarted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const inputRef = useRef(null);
-  const containerRef = useRef(null);
-  const currentLineRef = useRef(null);
-  const debounceTimer = useRef(null);
-
-  // 1. 인증 처리 개선 (로딩 상태 논리 오류 수정)
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>숲 속을 걷다</title>
+    <!-- 외부 라이브러리: 최소한의 핵심 도구만 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Noto Serif KR', serif; 
+            margin: 0; padding: 0; 
+            background-color: #ffffff; 
+            overflow: hidden; 
         }
-      } catch (error) {
-        console.error("Auth error:", error);
-        setIsLoading(false); // 에러 시에도 로딩 해제
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsLoading(false); // 사용자 존재 여부와 상관없이 인증 프로세스 종료 시 로딩 해제
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // 2. 데이터 불러오기 (설정값 포함)
-  useEffect(() => {
-    if (!user) return;
-
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
-    
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setLines(data.lines || []);
-        setGoal(data.goal || 500);
-        setFontSize(data.fontSize || 1.1); // 폰트 사이즈 보존 추가
-        
-        if (document.activeElement !== inputRef.current) {
-          setCurrentText(data.currentText || "");
+        .cursor-blink { animation: blink 1s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        /* 입력창 숨기기 */
+        #hidden-input {
+            position: fixed;
+            top: -100px;
+            opacity: 0;
         }
-      }
-    }, (error) => {
-      console.error("Firestore Read Error:", error);
-    });
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-    return () => unsubscribe();
-  }, [user]);
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-  // 3. 디바운싱된 데이터 저장 (서버 부하 감소)
-  const syncToCloud = useCallback((updatedLines, updatedText, updatedGoal, updatedFontSize) => {
-    if (!user) return;
-    
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    
-    debounceTimer.current = setTimeout(async () => {
-      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
-      try {
-        await setDoc(docRef, {
-          lines: updatedLines,
-          currentText: updatedText,
-          goal: updatedGoal,
-          fontSize: updatedFontSize,
-          lastUpdated: new Date().toISOString()
-        }, { merge: true });
-      } catch (error) {
-        console.error("Firestore Write Error:", error);
-      }
-    }, 500); // 500ms 디바운스 적용
-  }, [user]);
+        const App = () => {
+            const [isStarted, setIsStarted] = useState(false);
+            const [lines, setLines] = useState([]);
+            const [currentText, setCurrentText] = useState("");
+            const [goal, setGoal] = useState(500);
+            
+            const containerRef = useRef(null);
+            const inputRef = useRef(null);
 
-  const downloadAsFile = () => {
-    const fullText = [...lines, currentText].join('\n');
-    const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    link.href = url;
-    link.download = `forest-walk-${timestamp}.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+            // 화면 클릭 시 입력창으로 포커스 강제 이동
+            const handleGlobalClick = () => {
+                if (isStarted && inputRef.current) {
+                    inputRef.current.focus();
+                }
+            };
 
-  // 4. 스크롤 연출 계산 개선
-  useEffect(() => {
-    if (isStarted && currentLineRef.current && containerRef.current) {
-      const lineOffset = currentLineRef.current.offsetTop;
-      const viewportMid = window.innerHeight / 2;
-      // 상대적 위치 기반으로 계산하여 리사이즈 대응
-      containerRef.current.style.transform = `translateY(${viewportMid - lineOffset}px)`;
-    }
-  }, [currentText, lines, isStarted, fontSize]);
+            // 자동 스크롤 로직 (현재 쓰는 줄을 항상 가운데로)
+            useEffect(() => {
+                if (isStarted && containerRef.current) {
+                    const activeLine = document.getElementById('active-line');
+                    if (activeLine) {
+                        const offset = activeLine.offsetTop;
+                        const mid = window.innerHeight / 2;
+                        containerRef.current.style.transform = `translateY(${mid - offset}px)`;
+                    }
+                }
+            }, [currentText, lines, isStarted]);
 
-  const handleStart = () => {
-    setIsStarted(true);
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
+            const handleKeyDown = (e) => {
+                // 한글 씹힘 방지 (IME 체크)
+                if (e.nativeEvent.isComposing) return;
 
-  const handleInputChange = (e) => {
-    const val = e.target.value;
-    setCurrentText(val);
-    syncToCloud(lines, val, goal, fontSize);
-  };
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (currentText.trim() === "") return;
+                    setLines(prev => [...prev, currentText]);
+                    setCurrentText("");
+                }
+            };
 
-  const handleKeyDown = (e) => {
-    // 5. 한글 IME 입력 보호 (조합 중 엔터 처리 방지)
-    if (e.nativeEvent.isComposing) return;
+            const totalChars = lines.join('').length + currentText.length;
 
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const newLines = [...lines, currentText];
-      setLines(newLines);
-      setCurrentText("");
-      syncToCloud(newLines, "", goal, fontSize);
-    }
-  };
+            // 시작 화면
+            if (!isStarted) {
+                return (
+                    <div className="flex h-screen items-center justify-center bg-stone-50">
+                        <div className="text-center space-y-8 p-10">
+                            <h1 className="text-4xl font-extralight text-stone-800 tracking-widest">숲 속을 걷다</h1>
+                            <p className="text-stone-400 text-sm italic">"모든 문장은 당신이 남긴 발자국입니다."</p>
+                            <div className="pt-10 space-y-4">
+                                <input 
+                                    type="number" 
+                                    value={goal}
+                                    onChange={(e) => setGoal(e.target.value)}
+                                    className="block w-full text-center bg-transparent border-b border-stone-200 py-2 focus:outline-none focus:border-stone-500 transition-colors"
+                                    placeholder="목표 글자 수"
+                                />
+                                <button 
+                                    onClick={() => setIsStarted(true)}
+                                    className="w-full bg-stone-800 text-white py-4 rounded-sm hover:bg-black transition-all font-light tracking-widest"
+                                >
+                                    산책 시작
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
-  // 줄바꿈을 포함한 실제 문자수 계산
-  const totalChars = lines.join('\n').length + (lines.length > 0 && currentText ? 1 : 0) + currentText.length;
+            // 집필 화면
+            return (
+                <div className="relative h-screen w-screen overflow-hidden bg-white" onClick={handleGlobalClick}>
+                    {/* 실제 입력을 받는 숨겨진 요소 */}
+                    <textarea
+                        id="hidden-input"
+                        ref={inputRef}
+                        autoFocus
+                        value={currentText}
+                        onChange={(e) => setCurrentText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                    />
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-white text-gray-400 font-serif">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-2 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
-          <p className="text-sm tracking-widest">여정을 준비하는 중...</p>
-        </div>
-      </div>
-    );
-  }
+                    {/* 텍스트 렌더링 영역 */}
+                    <div 
+                        ref={containerRef} 
+                        className="absolute w-full transition-transform duration-700 ease-out flex flex-col items-center"
+                    >
+                        <div className="w-[80%] max-w-2xl space-y-16">
+                            {lines.map((line, i) => (
+                                <p key={i} className="text-stone-300 text-center leading-loose text-xl break-words">
+                                    {line}
+                                </p>
+                            ))}
+                            <div id="active-line" className="text-center relative">
+                                <span className="text-stone-800 text-2xl leading-loose break-words inline-block min-h-[1.5em]">
+                                    {currentText}
+                                </span>
+                                <span className="inline-block w-[1.5px] h-[1.2em] bg-emerald-600 ml-1 align-middle cursor-blink" />
+                            </div>
+                            <div className="h-[60vh]" />
+                        </div>
+                    </div>
 
-  if (!isStarted) {
-    return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-white p-6 font-serif">
-        <div className="max-w-xs w-full text-center space-y-8">
-          <h1 className="text-3xl font-light text-emerald-700 tracking-widest">숲 속을 걷다</h1>
-          <p className="text-gray-400 text-sm leading-relaxed italic">"모든 글자는 당신의 발자국입니다."</p>
-          
-          <div className="space-y-4 pt-4">
-            <div className="text-left">
-              <label className="text-[10px] text-gray-400 ml-1 uppercase tracking-tighter">목표 글자수</label>
-              <input 
-                type="number" 
-                value={goal}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setGoal(val);
-                  syncToCloud(lines, currentText, val, fontSize);
-                }}
-                className="w-full bg-gray-50 border-none rounded-xl p-4 text-center text-lg focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
-              />
-            </div>
-            <button 
-              onClick={handleStart}
-              className="w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
-            >
-              {lines.length > 0 || currentText.length > 0 ? '여정 이어가기' : '새 여정 시작'}
-            </button>
-            <button 
-              onClick={downloadAsFile}
-              className="w-full bg-white text-emerald-600 border border-emerald-100 rounded-xl p-3 text-sm font-medium hover:bg-emerald-50 transition-all"
-            >
-              내 컴퓨터에 저장 (.txt)
-            </button>
-            {user && (
-              <div className="pt-4 opacity-30 group">
-                 <p className="text-[9px] text-gray-300 select-none break-all group-hover:opacity-100 transition-opacity">ID: {user.uid}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+                    {/* 상태 바 */}
+                    <div className="fixed bottom-8 left-0 w-full flex justify-center pointer-events-none">
+                        <div className="bg-white/80 backdrop-blur-sm px-6 py-2 rounded-full border border-stone-100 shadow-sm flex items-center gap-8">
+                            <div className="flex flex-col items-center">
+                                <span className="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">Progress</span>
+                                <span className="text-sm text-stone-800 font-medium tabular-nums">
+                                    {totalChars} / {goal}
+                                </span>
+                            </div>
+                            <button 
+                                onClick={() => setIsStarted(false)}
+                                className="pointer-events-auto text-[10px] text-stone-300 hover:text-stone-800 transition-colors uppercase font-bold tracking-widest"
+                            >
+                                Stop
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
-  return (
-    <div className="relative h-screen w-screen bg-white overflow-hidden font-serif" onClick={() => inputRef.current?.focus()}>
-      <textarea
-        ref={inputRef}
-        value={currentText}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        className="absolute inset-0 opacity-0 z-50 cursor-default resize-none outline-none"
-        spellCheck="false"
-      />
-
-      <div className="absolute top-6 left-6 z-40 opacity-10 hover:opacity-100 transition-all flex flex-col gap-4 bg-white/80 backdrop-blur p-4 rounded-2xl border border-gray-100 shadow-sm">
-        <div className="flex flex-col gap-1">
-          <span className="text-[10px] text-gray-400 font-sans font-bold">FONT SIZE</span>
-          <input 
-            type="range" min="0.8" max="2.5" step="0.1" 
-            value={fontSize} 
-            onChange={(e) => {
-              const val = parseFloat(e.target.value);
-              setFontSize(val);
-              syncToCloud(lines, currentText, goal, val);
-            }}
-            className="w-32 accent-emerald-600 cursor-pointer"
-          />
-        </div>
-        <div className="flex flex-col gap-2 border-t pt-2">
-          <button 
-            onClick={downloadAsFile}
-            className="text-[11px] text-emerald-600 hover:font-bold text-left transition-all"
-          >
-            내보내기 (.txt)
-          </button>
-          <button 
-            onClick={() => setIsStarted(false)}
-            className="text-[11px] text-gray-400 hover:text-emerald-600 text-left transition-colors font-medium"
-          >
-            대시보드로 이동
-          </button>
-        </div>
-      </div>
-
-      <div 
-        ref={containerRef}
-        className="absolute w-full transition-transform duration-1000 ease-[cubic-bezier(0.2,0,0.2,1)] flex flex-col items-center"
-      >
-        <div className="w-[85%] max-w-2xl space-y-8">
-          {lines.map((line, i) => (
-            <p 
-              key={i} 
-              className="text-gray-300 leading-relaxed break-words transition-all duration-700"
-              style={{ fontSize: `${fontSize}rem`, textAlign: 'center' }}
-            >
-              {line}
-            </p>
-          ))}
-          
-          <div 
-            ref={currentLineRef}
-            className="relative"
-            style={{ fontSize: `${fontSize}rem`, textAlign: 'center' }}
-          >
-            <span className="text-gray-800 leading-relaxed break-words min-h-[1.5em] inline-block">{currentText}</span>
-            <span className={`inline-block w-[2px] h-[1.1em] bg-emerald-500 ml-1 align-middle ${!currentText && 'animate-pulse'}`} />
-          </div>
-          
-          <div className="h-[60vh]" />
-        </div>
-      </div>
-
-      <div className="absolute bottom-8 right-8 text-right pointer-events-none select-none">
-        <div className="text-4xl font-light text-emerald-900/10 tracking-tighter tabular-nums leading-none">
-          {totalChars}
-        </div>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-900/20 mt-1">
-          PROGRESS / {goal}
-        </div>
-      </div>
-      
-      {totalChars >= goal && (
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
-          <div className="bg-emerald-600/90 backdrop-blur text-white px-8 py-2 rounded-full text-xs font-bold shadow-2xl animate-bounce">
-            목표를 달성했습니다
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default App;
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
