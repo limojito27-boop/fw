@@ -3,44 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>숲 속을 걷다</title>
-    <!-- 외부 라이브러리 -->
+    <title>숲 속을 걷다 - Forest Walk</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400&display=swap" rel="stylesheet">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;400;700&display=swap');
         body { 
             font-family: 'Noto Serif KR', serif; 
-            margin: 0; padding: 0; 
-            background-color: #ffffff; 
-            overflow: hidden; 
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
         }
-        .cursor-blink { animation: blink 1s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        /* 입력창 위치를 화면 밖으로 숨김 */
-        #hidden-input {
-            position: fixed;
-            top: -100px;
-            opacity: 0;
+        .cursor-blink {
+            animation: blink 1s infinite;
         }
-        /* 커스텀 슬라이더 스타일 */
-        input[type='range'] {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 2px;
-            background: #e5e7eb;
-            outline: none;
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
         }
-        input[type='range']::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 10px;
-            height: 10px;
-            background: #065f46;
-            border-radius: 50%;
-            cursor: pointer;
-        }
+        /* 숨겨진 스크롤바 */
+        ::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
@@ -50,114 +35,88 @@
         const { useState, useEffect, useRef } = React;
 
         const App = () => {
-            const [isStarted, setIsStarted] = useState(false);
             const [lines, setLines] = useState([]);
             const [currentText, setCurrentText] = useState("");
             const [goal, setGoal] = useState(500);
-            const [copyStatus, setCopyStatus] = useState("전체 복사");
+            const [fontSize, setFontSize] = useState(1.1);
+            const [textAlign, setTextAlign] = useState("left"); // 기본 좌측 정렬
+            const [maxWidth, setMaxWidth] = useState(42); // 가로 너비 (rem)
+            const [isStarted, setIsStarted] = useState(false);
+            const [showSettings, setShowSettings] = useState(false);
             
-            // UI 설정 상태
-            const [fontSize, setFontSize] = useState(24);
-            const [maxWidth, setMaxWidth] = useState(600);
-            
-            const containerRef = useRef(null);
             const inputRef = useRef(null);
+            const containerRef = useRef(null);
+            const currentLineRef = useRef(null);
 
-            const getFullText = () => [...lines, currentText].join('\n');
-
-            // 클립보드 복사 기능 (노션 임베드 대응)
-            const copyToClipboard = () => {
-                const text = getFullText();
-                if (!text.trim()) return;
-
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                    setCopyStatus("복사됨!");
-                    setTimeout(() => setCopyStatus("전체 복사"), 2000);
-                } catch (err) {
-                    setCopyStatus("복사 실패");
-                }
-                document.body.removeChild(textArea);
-            };
-
-            // 텍스트 파일(.txt)로 다운로드 기능
-            const downloadAsFile = () => {
-                const fullText = getFullText();
-                if (!fullText.trim()) return;
-
-                const blob = new Blob([fullText], { type: 'text/plain' });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                
-                const now = new Date();
-                const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-                
-                a.href = url;
-                a.download = `숲속산책_${timestamp}.txt`;
-                a.click();
-                window.URL.revokeObjectURL(url);
-            };
-
-            // 화면 어디든 클릭하면 입력창에 포커스
-            const handleGlobalClick = () => {
-                if (isStarted && inputRef.current) {
-                    inputRef.current.focus();
-                }
-            };
-
-            // 자동 스크롤 로직
+            // 초기 설정 로드
             useEffect(() => {
-                if (isStarted && containerRef.current) {
-                    const activeLine = document.getElementById('active-line');
-                    if (activeLine) {
-                        const offset = activeLine.offsetTop;
-                        const mid = window.innerHeight / 2;
-                        containerRef.current.style.transform = `translateY(${mid - offset}px)`;
-                    }
+                const savedData = localStorage.getItem('forest-walk-v2');
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    setLines(parsed.lines || []);
+                    setGoal(parsed.goal || 500);
+                    setFontSize(parsed.fontSize || 1.1);
+                    setTextAlign(parsed.textAlign || "left");
+                    setMaxWidth(parsed.maxWidth || 42);
                 }
-            }, [currentText, lines, isStarted]);
+            }, []);
+
+            // 자동 저장
+            useEffect(() => {
+                const state = { lines, goal, fontSize, textAlign, maxWidth };
+                localStorage.setItem('forest-walk-v2', JSON.stringify(state));
+            }, [lines, goal, fontSize, textAlign, maxWidth]);
+
+            // 스크롤 동기화
+            useEffect(() => {
+                if (isStarted && currentLineRef.current && containerRef.current) {
+                    const lineOffset = currentLineRef.current.offsetTop;
+                    const viewportMid = window.innerHeight / 2;
+                    containerRef.current.style.transform = `translateY(${viewportMid - lineOffset}px)`;
+                }
+            }, [currentText, lines, isStarted, fontSize, maxWidth]);
+
+            const handleStart = () => {
+                setIsStarted(true);
+                setTimeout(() => inputRef.current?.focus(), 100);
+            };
 
             const handleKeyDown = (e) => {
                 if (e.nativeEvent.isComposing) return;
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (currentText.trim() === "") return;
-                    setLines(prev => [...prev, currentText]);
-                    setCurrentText("");
+                    if (currentText.trim() !== "") {
+                        setLines(prev => [...prev, currentText]);
+                        setCurrentText("");
+                    }
                 }
             };
 
             const totalChars = lines.join('').length + currentText.length;
-            const isGoalReached = totalChars >= goal;
 
-            // 시작 화면
             if (!isStarted) {
                 return (
-                    <div className="flex h-screen items-center justify-center bg-stone-50">
-                        <div className="text-center space-y-8 p-10">
-                            <h1 className="text-4xl font-extralight text-stone-800 tracking-widest">숲 속을 걷다</h1>
-                            <p className="text-stone-400 text-sm italic">"모든 문장은 당신이 남긴 발자국입니다."</p>
+                    <div className="flex h-screen flex-col items-center justify-center p-8 bg-white">
+                        <div className="max-w-md w-full text-center space-y-12">
+                            <h1 className="text-5xl font-extralight text-emerald-900 tracking-[0.2em]">숲 속을 걷다</h1>
+                            <p className="text-gray-400 text-sm italic">"모든 글자는 당신의 발자국입니다."</p>
                             
-                            <div className="pt-10 space-y-4 max-w-xs mx-auto">
+                            <div className="space-y-4 pt-10">
                                 <div className="text-left">
-                                    <label className="text-[10px] text-stone-400 uppercase tracking-widest ml-2 font-bold">목표 글자 수</label>
+                                    <label className="text-[10px] uppercase tracking-widest text-gray-400 ml-2">목표 글자수</label>
                                     <input 
                                         type="number" 
-                                        value={goal}
+                                        value={goal} 
                                         onChange={(e) => setGoal(Number(e.target.value))}
-                                        className="block w-full text-center bg-transparent border-b border-stone-200 py-2 focus:outline-none focus:border-stone-500 transition-colors"
+                                        className="w-full bg-gray-50 border-none rounded-2xl p-4 text-center text-xl focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
                                     />
                                 </div>
-                                <button 
-                                    onClick={() => setIsStarted(true)}
-                                    className="w-full bg-stone-800 text-white py-4 rounded-sm hover:bg-black transition-all font-light tracking-widest"
-                                >
-                                    산책 시작
+                                <button onClick={handleStart} className="w-full bg-emerald-900 text-white rounded-2xl py-5 text-lg font-light hover:bg-emerald-800 transition-all shadow-xl shadow-emerald-100">
+                                    {lines.length > 0 ? "여정 이어가기" : "새 여정 시작"}
                                 </button>
+                                {lines.length > 0 && (
+                                    <button onClick={() => {if(confirm('여정을 초기화할까요?')) setLines([]);}} className="w-full text-gray-300 text-xs hover:text-red-300 transition-colors">기록 삭제</button>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -165,60 +124,79 @@
             }
 
             return (
-                <div className="relative h-screen w-screen overflow-hidden bg-white" onClick={handleGlobalClick}>
-                    {/* 설정 패널 */}
-                    <div className="fixed top-8 left-8 z-50 flex flex-col gap-4 p-4 bg-white/50 backdrop-blur-md rounded-xl border border-stone-100 opacity-20 hover:opacity-100 transition-opacity duration-500">
-                        <div className="space-y-1">
-                            <label className="text-[9px] text-stone-500 uppercase tracking-tighter block font-bold">글자 크기</label>
-                            <input type="range" min="14" max="60" value={fontSize} onChange={(e) => setFontSize(e.target.value)} className="w-24" />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[9px] text-stone-500 uppercase tracking-tighter block font-bold">문단 너비</label>
-                            <input type="range" min="300" max="1200" value={maxWidth} onChange={(e) => setMaxWidth(e.target.value)} className="w-24" />
-                        </div>
+                <div className="relative h-screen w-screen bg-white overflow-hidden" onClick={() => inputRef.current?.focus()}>
+                    
+                    {/* 설정 메뉴 패널 */}
+                    <div className="fixed top-6 left-6 z-[100] flex flex-col gap-4">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }}
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:text-emerald-800 transition-all pointer-events-auto shadow-sm"
+                        >
+                            {showSettings ? '✕' : '☰'}
+                        </button>
+
+                        {showSettings && (
+                            <div className="bg-white/90 backdrop-blur-md p-6 rounded-3xl shadow-2xl border border-gray-100 w-64 space-y-6 pointer-events-auto animate-in fade-in slide-in-from-left-4 duration-300" onClick={e => e.stopPropagation()}>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase tracking-widest text-emerald-800 font-bold">글자 크기 ({fontSize}rem)</label>
+                                    <input type="range" min="0.8" max="2.5" step="0.1" value={fontSize} onChange={e => setFontSize(e.target.value)} className="w-full accent-emerald-600" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase tracking-widest text-emerald-800 font-bold">좌우 여백 (폭 조절)</label>
+                                    <input type="range" min="20" max="60" step="1" value={maxWidth} onChange={e => setMaxWidth(e.target.value)} className="w-full accent-emerald-600" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase tracking-widest text-emerald-800 font-bold">정렬 방향</label>
+                                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                                        <button onClick={() => setTextAlign('left')} className={`flex-1 py-2 text-xs rounded-lg transition-all ${textAlign === 'left' ? 'bg-white shadow-sm text-emerald-800' : 'text-gray-400'}`}>좌측</button>
+                                        <button onClick={() => setTextAlign('center')} className={`flex-1 py-2 text-xs rounded-lg transition-all ${textAlign === 'center' ? 'bg-white shadow-sm text-emerald-800' : 'text-gray-400'}`}>중앙</button>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsStarted(false)} className="w-full py-3 bg-gray-900 text-white rounded-xl text-xs font-light tracking-widest">메인으로</button>
+                            </div>
+                        )}
                     </div>
 
-                    <textarea id="hidden-input" ref={inputRef} autoFocus value={currentText} onChange={(e) => setCurrentText(e.target.value)} onKeyDown={handleKeyDown} />
-
-                    <div ref={containerRef} className="absolute w-full transition-transform duration-700 ease-out flex flex-col items-center">
-                        <div className="space-y-16 transition-all duration-300" style={{ width: '90%', maxWidth: `${maxWidth}px` }}>
+                    {/* 본문 영역 */}
+                    <div 
+                        ref={containerRef}
+                        className="mx-auto px-10 transition-all duration-700 ease-out"
+                        style={{ maxWidth: `${maxWidth}rem` }}
+                    >
+                        <div className="space-y-4 mb-4">
                             {lines.map((line, i) => (
-                                <p key={i} className="text-stone-300 text-center leading-loose break-words" style={{ fontSize: `${fontSize}px` }}>{line}</p>
+                                <p key={i} className="text-gray-300 leading-relaxed break-words" style={{ fontSize: `${fontSize}rem`, textAlign: textAlign }}>
+                                    {line}
+                                </p>
                             ))}
-                            <div id="active-line" className="text-center relative">
-                                <span className="text-stone-800 leading-loose break-words inline-block min-h-[1.5em]" style={{ fontSize: `${fontSize}px` }}>{currentText}</span>
-                                <span className="inline-block w-[1.5px] bg-emerald-600 ml-1 align-middle cursor-blink" style={{ height: `${fontSize * 1.2}px` }} />
-                            </div>
-                            <div className="h-[60vh]" />
                         </div>
+
+                        <div ref={currentLineRef} style={{ fontSize: `${fontSize}rem`, textAlign: textAlign }} className="relative">
+                            <span className="text-emerald-900 leading-relaxed break-words min-h-[1.5em] inline-block">
+                                {currentText}
+                                <span className="inline-block w-[2px] h-[1.1em] bg-emerald-500 ml-1 align-middle cursor-blink" />
+                            </span>
+                        </div>
+                        <div className="h-[60vh]" />
                     </div>
 
-                    {/* 하단 제어 바: 목표 달성 시 저장 및 복사 버튼 노출 */}
-                    <div className={`fixed bottom-8 left-0 w-full flex justify-center pointer-events-none transition-all duration-1000 ${isGoalReached ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-                        <div className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full border border-stone-200 shadow-xl flex items-center gap-6 pointer-events-auto">
-                            <div className="flex flex-col items-center pr-4 border-r border-stone-100">
-                                <span className="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">글자 수</span>
-                                <span className="text-sm text-emerald-600 font-bold tabular-nums">{totalChars} / {goal}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button onClick={copyToClipboard} className="text-[10px] bg-stone-100 text-stone-600 px-4 py-2 rounded-full hover:bg-stone-200 transition-colors uppercase font-bold tracking-widest min-w-[90px]">
-                                    {copyStatus}
-                                </button>
-                                <button onClick={downloadAsFile} className="text-[10px] bg-stone-800 text-white px-4 py-2 rounded-full hover:bg-black transition-colors uppercase font-bold tracking-widest">
-                                    텍스트 저장 (.txt)
-                                </button>
-                                <button onClick={() => confirm("산책을 종료할까요? (저장되지 않은 글은 사라집니다)") && setIsStarted(false)} className="text-[10px] text-stone-400 hover:text-stone-800 transition-colors uppercase font-bold tracking-widest px-2">
-                                    종료
-                                </button>
-                            </div>
+                    <textarea
+                        ref={inputRef}
+                        value={currentText}
+                        onChange={(e) => setCurrentText(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        className="fixed opacity-0 pointer-events-none"
+                    />
+
+                    {/* 진행도 표시 */}
+                    <div className="fixed bottom-10 right-10 text-right select-none pointer-events-none">
+                        <div className="text-4xl font-light text-emerald-900/10 tracking-tighter tabular-nums leading-none">
+                            {totalChars}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-widest text-emerald-900/20 mt-1">
+                            PROGRESS / {goal}
                         </div>
                     </div>
-
-                    {!isGoalReached && (
-                        <div className="fixed bottom-8 right-8 text-[10px] text-stone-300 font-bold uppercase tracking-[0.2em]">
-                            {totalChars} / {goal}
-                        </div>
-                    )}
                 </div>
             );
         };
