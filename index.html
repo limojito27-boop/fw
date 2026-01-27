@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>숲 속을 걷다</title>
-    <!-- 외부 라이브러리: 최소한의 핵심 도구만 로드 -->
+    <!-- 외부 라이브러리 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -19,11 +19,27 @@
         }
         .cursor-blink { animation: blink 1s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        /* 입력창 숨기기 */
+        /* 입력창 위치를 화면 밖으로 숨김 */
         #hidden-input {
             position: fixed;
             top: -100px;
             opacity: 0;
+        }
+        /* 커스텀 슬라이더 스타일 */
+        input[type='range'] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 2px;
+            background: #e5e7eb;
+            outline: none;
+        }
+        input[type='range']::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 10px;
+            height: 10px;
+            background: #065f46;
+            border-radius: 50%;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -39,17 +55,40 @@
             const [currentText, setCurrentText] = useState("");
             const [goal, setGoal] = useState(500);
             
+            // UI 설정 상태
+            const [fontSize, setFontSize] = useState(24);
+            const [maxWidth, setMaxWidth] = useState(600);
+            
             const containerRef = useRef(null);
             const inputRef = useRef(null);
 
-            // 화면 클릭 시 입력창으로 포커스 강제 이동
+            // 텍스트 파일(.txt)로 다운로드하는 핵심 기능
+            const downloadAsFile = () => {
+                // 현재까지 작성된 줄바꿈된 텍스트와 작성 중인 텍스트 합치기
+                const fullText = [...lines, currentText].join('\n');
+                if (!fullText.trim()) return;
+
+                const blob = new Blob([fullText], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+                
+                a.href = url;
+                a.download = `walk_in_forest_${timestamp}.txt`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            };
+
+            // 화면 어디든 클릭하면 입력창에 포커스
             const handleGlobalClick = () => {
                 if (isStarted && inputRef.current) {
                     inputRef.current.focus();
                 }
             };
 
-            // 자동 스크롤 로직 (현재 쓰는 줄을 항상 가운데로)
+            // 텍스트 입력 시 자동으로 화면 중앙으로 스크롤 이동
             useEffect(() => {
                 if (isStarted && containerRef.current) {
                     const activeLine = document.getElementById('active-line');
@@ -62,9 +101,7 @@
             }, [currentText, lines, isStarted]);
 
             const handleKeyDown = (e) => {
-                // 한글 씹힘 방지 (IME 체크)
-                if (e.nativeEvent.isComposing) return;
-
+                if (e.nativeEvent.isComposing) return; // 한글 조합 에러 방지
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     if (currentText.trim() === "") return;
@@ -82,14 +119,17 @@
                         <div className="text-center space-y-8 p-10">
                             <h1 className="text-4xl font-extralight text-stone-800 tracking-widest">숲 속을 걷다</h1>
                             <p className="text-stone-400 text-sm italic">"모든 문장은 당신이 남긴 발자국입니다."</p>
-                            <div className="pt-10 space-y-4">
-                                <input 
-                                    type="number" 
-                                    value={goal}
-                                    onChange={(e) => setGoal(e.target.value)}
-                                    className="block w-full text-center bg-transparent border-b border-stone-200 py-2 focus:outline-none focus:border-stone-500 transition-colors"
-                                    placeholder="목표 글자 수"
-                                />
+                            
+                            <div className="pt-10 space-y-4 max-w-xs mx-auto">
+                                <div className="text-left">
+                                    <label className="text-[10px] text-stone-400 uppercase tracking-widest ml-2">목표 글자 수</label>
+                                    <input 
+                                        type="number" 
+                                        value={goal}
+                                        onChange={(e) => setGoal(e.target.value)}
+                                        className="block w-full text-center bg-transparent border-b border-stone-200 py-2 focus:outline-none focus:border-stone-500 transition-colors"
+                                    />
+                                </div>
                                 <button 
                                     onClick={() => setIsStarted(true)}
                                     className="w-full bg-stone-800 text-white py-4 rounded-sm hover:bg-black transition-all font-light tracking-widest"
@@ -102,10 +142,30 @@
                 );
             }
 
-            // 집필 화면
+            // 산책 중 화면 (작성 화면)
             return (
                 <div className="relative h-screen w-screen overflow-hidden bg-white" onClick={handleGlobalClick}>
-                    {/* 실제 입력을 받는 숨겨진 요소 */}
+                    {/* 좌상단 설정 패널 (투명도 조절형) */}
+                    <div className="fixed top-8 left-8 z-50 flex flex-col gap-4 p-4 bg-white/50 backdrop-blur-md rounded-xl border border-stone-100 opacity-20 hover:opacity-100 transition-opacity duration-500">
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-stone-500 uppercase tracking-tighter block font-bold">Text Size</label>
+                            <input 
+                                type="range" min="14" max="60" value={fontSize}
+                                onChange={(e) => setFontSize(e.target.value)}
+                                className="w-24"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-stone-500 uppercase tracking-tighter block font-bold">Line Width</label>
+                            <input 
+                                type="range" min="300" max="1200" value={maxWidth}
+                                onChange={(e) => setMaxWidth(e.target.value)}
+                                className="w-24"
+                            />
+                        </div>
+                    </div>
+
+                    {/* 실제 입력을 받는 숨겨진 TextArea */}
                     <textarea
                         id="hidden-input"
                         ref={inputRef}
@@ -120,23 +180,23 @@
                         ref={containerRef} 
                         className="absolute w-full transition-transform duration-700 ease-out flex flex-col items-center"
                     >
-                        <div className="w-[80%] max-w-2xl space-y-16">
+                        <div className="space-y-16 transition-all duration-300" style={{ width: '90%', maxWidth: `${maxWidth}px` }}>
                             {lines.map((line, i) => (
-                                <p key={i} className="text-stone-300 text-center leading-loose text-xl break-words">
+                                <p key={i} className="text-stone-300 text-center leading-loose break-words transition-all duration-300" style={{ fontSize: `${fontSize}px` }}>
                                     {line}
                                 </p>
                             ))}
                             <div id="active-line" className="text-center relative">
-                                <span className="text-stone-800 text-2xl leading-loose break-words inline-block min-h-[1.5em]">
+                                <span className="text-stone-800 leading-loose break-words inline-block min-h-[1.5em] transition-all duration-300" style={{ fontSize: `${fontSize}px` }}>
                                     {currentText}
                                 </span>
-                                <span className="inline-block w-[1.5px] h-[1.2em] bg-emerald-600 ml-1 align-middle cursor-blink" />
+                                <span className="inline-block w-[1.5px] bg-emerald-600 ml-1 align-middle cursor-blink" style={{ height: `${fontSize * 1.2}px` }} />
                             </div>
                             <div className="h-[60vh]" />
                         </div>
                     </div>
 
-                    {/* 상태 바 */}
+                    {/* 하단 제어 바 */}
                     <div className="fixed bottom-8 left-0 w-full flex justify-center pointer-events-none">
                         <div className="bg-white/80 backdrop-blur-sm px-6 py-2 rounded-full border border-stone-100 shadow-sm flex items-center gap-8">
                             <div className="flex flex-col items-center">
@@ -145,12 +205,26 @@
                                     {totalChars} / {goal}
                                 </span>
                             </div>
-                            <button 
-                                onClick={() => setIsStarted(false)}
-                                className="pointer-events-auto text-[10px] text-stone-300 hover:text-stone-800 transition-colors uppercase font-bold tracking-widest"
-                            >
-                                Stop
-                            </button>
+                            <div className="flex gap-4 pointer-events-auto">
+                                <button 
+                                    onClick={downloadAsFile}
+                                    className="text-[10px] bg-stone-800 text-white px-4 py-1.5 rounded-full hover:bg-black transition-colors uppercase font-bold tracking-widest"
+                                >
+                                    Save (.txt)
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        if(confirm("산책을 종료하고 메인으로 돌아갈까요? (저장되지 않은 글은 사라집니다)")) {
+                                            setIsStarted(false);
+                                            setLines([]);
+                                            setCurrentText("");
+                                        }
+                                    }}
+                                    className="text-[10px] text-stone-400 hover:text-stone-800 transition-colors uppercase font-bold tracking-widest px-2"
+                                >
+                                    Exit
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
