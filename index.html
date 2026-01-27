@@ -1,321 +1,245 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>숲 속을 걷다 - Notion Widget</title>
-    <link href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.1/RIDIBatang.css" rel="stylesheet">
-    <style>
-        :root { 
-            --bg: #fdfaf6; --text: #37352f; --accent: #000; --primary: #4eb08c; 
-            --card: #ffffff; --box-bg: #f1f1ef; --border: #ededeb;
-        }
-        [data-theme='dark'] { 
-            --bg: #191919; --text: #d3d3d3; --accent: #fff; --primary: #7bdcb5; 
-            --card: #252525; --box-bg: #2f2f2f; --border: #373737;
-        }
-        
-        body, html { 
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            background: var(--bg); color: var(--text); 
-            overflow: hidden; transition: 0.3s; 
-            font-family: 'RIDIBatang', serif; 
-        }
-        
-        /* 노션 위젯 특화 스타일 - 스크롤바 숨김 */
-        ::-webkit-scrollbar { display: none; }
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
-        /* 시작 화면 */
-        #landing-screen { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: var(--bg); z-index: 4000; 
-            display: flex; align-items: center; justify-content: center; 
-        }
-        .landing-card { 
-            background: var(--card); padding: 30px; border-radius: 20px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; 
-            width: 85%; max-width: 320px; border: 1px solid var(--border);
-        }
+// Firebase Configuration
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'forest-walk-notion';
 
-        /* 제어판 (좌측 상단 플로팅) */
-        .controls { 
-            position: fixed; top: 10px; left: 10px; z-index: 2000; 
-            display: none; flex-direction: column; gap: 8px; 
-            opacity: 0.1; transition: 0.3s; background: var(--card); 
-            padding: 15px; border-radius: 12px; border: 1px solid var(--border);
-            width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .controls:hover { opacity: 1; }
-        .control-item { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; }
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [lines, setLines] = useState([]);
+  const [currentText, setCurrentText] = useState("");
+  const [goal, setGoal] = useState(500);
+  const [fontSize, setFontSize] = useState(1.1);
+  const [isStarted, setIsStarted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const inputRef = useRef(null);
+  const containerRef = useRef(null);
+  const currentLineRef = useRef(null);
 
-        /* 입력 및 버튼 */
-        input[type="number"], input[type="text"] { 
-            padding: 8px; border-radius: 6px; border: 1px solid var(--border); 
-            background: var(--box-bg); color: var(--text);
-            font-family: inherit; font-size: 0.9rem; width: 100%; 
-            box-sizing: border-box; text-align: center; outline: none;
+  // 1. Authentication - RULE 3: Auth Before Queries
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
         }
-        .btn { 
-            cursor: pointer; border: none; border-radius: 8px; 
-            padding: 10px; font-family: inherit; font-weight: bold; 
-            width: 100%; transition: 0.2s; 
-        }
-        .primary-btn { background: var(--primary); color: white; font-size: 1rem; }
+      } catch (error) {
+        console.error("Auth error:", error);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Data Synchronization (Cloud -> UI) - RULE 1: Strict Paths
+  useEffect(() => {
+    if (!user) return;
+
+    // RULE 1: Path must be /artifacts/{appId}/users/{userId}/{collectionName}
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
+    
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setLines(data.lines || []);
+        setGoal(data.goal || 500);
         
-        /* 글쓰기 영역 */
-        .flow-container { 
-            position: absolute; width: 100%; top: 50%; 
-            transition: transform 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67); 
-            display: flex; flex-direction: column; align-items: center; 
+        // 작성 중일 때는 외부 업데이트(동기화)로 인해 텍스트가 덮어씌워지지 않도록 방지
+        if (!document.activeElement || document.activeElement !== inputRef.current) {
+          setCurrentText(data.currentText || "");
         }
-        .line { 
-            line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; 
-            margin: 0.6rem 0; transition: all 0.4s; width: 85%; 
-        }
-        .line.old { opacity: 0.2; filter: blur(0.8px); }
-        .line.current { opacity: 1; filter: blur(0px); color: var(--accent); position: relative; }
-        
-        .cursor { 
-            display: inline-block; width: 2px; background-color: var(--primary); 
-            margin-left: 2px; animation: blink 1s infinite; vertical-align: middle; 
-        }
-        @keyframes blink { 50% { opacity: 0; } }
-        
-        #hidden-input { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            opacity: 0; z-index: 1000; border: none; outline: none; resize: none; 
-        }
-        
-        .info-panel { 
-            position: fixed; bottom: 15px; right: 15px; 
-            text-align: right; font-size: 0.75rem; opacity: 0.4; pointer-events: none;
-        }
+      }
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Firestore Read Error:", error);
+      setIsLoading(false);
+    });
 
-        .finish-btn { 
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
-            background: var(--primary); color: white; padding: 10px 25px; 
-            border-radius: 20px; font-weight: bold; z-index: 2000; 
-            display: none; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(78, 176, 140, 0.3);
-        }
+    return () => unsubscribe();
+  }, [user]);
 
-        /* 결과 화면 */
-        #result-screen { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: var(--bg); display: none; flex-direction: column; 
-            align-items: center; justify-content: center; z-index: 3000; 
-        }
-        .result-card { 
-            background: var(--card); padding: 30px; border-radius: 20px; 
-            width: 85%; max-width: 400px; text-align: center; border: 1px solid var(--border);
-        }
-        .text-preview-box { 
-            background: var(--box-bg); padding: 15px; border-radius: 8px; 
-            max-height: 200px; overflow-y: auto; text-align: left; 
-            font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; white-space: pre-wrap; 
-        }
-    </style>
-</head>
-<body data-theme="light">
+  // 3. Data Persistence (UI -> Cloud) - Ensure async/await
+  const syncToCloud = async (updatedLines, updatedText, updatedGoal) => {
+    if (!user) return;
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
+    try {
+      await setDoc(docRef, {
+        lines: updatedLines,
+        currentText: updatedText,
+        goal: updatedGoal,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Firestore Write Error:", error);
+    }
+  };
 
-    <!-- 시작 화면 -->
-    <div id="landing-screen">
-        <div class="landing-card">
-            <h1 style="color:var(--primary); font-size: 1.8rem; margin: 0 0 10px 0;">숲 속을 걷다</h1>
-            <p style="opacity:0.7; font-size: 0.85rem; margin-bottom: 20px;">오늘의 목표 글자수</p>
-            <div style="margin-bottom: 20px;">
-                <input type="number" id="initial-goal" value="500" placeholder="숫자 입력">
+  // 4. Scrolling Logic
+  useEffect(() => {
+    if (isStarted && currentLineRef.current && containerRef.current) {
+      const lineOffset = currentLineRef.current.offsetTop;
+      const containerHeight = window.innerHeight;
+      containerRef.current.style.transform = `translateY(${(containerHeight / 2) - lineOffset}px)`;
+    }
+  }, [currentText, lines, isStarted]);
+
+  const handleStart = () => {
+    setIsStarted(true);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setCurrentText(val);
+    syncToCloud(lines, val, goal);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (currentText.trim() === "") return;
+      const newLines = [...lines, currentText];
+      setLines(newLines);
+      setCurrentText("");
+      syncToCloud(newLines, "", goal);
+    }
+  };
+
+  const totalChars = lines.join('').length + currentText.length;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-white text-gray-400 font-serif">
+        <p>기록을 안전하게 연결하는 중...</p>
+      </div>
+    );
+  }
+
+  if (!isStarted) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-white p-6 font-serif">
+        <div className="max-w-xs w-full text-center space-y-8">
+          <h1 className="text-3xl font-light text-emerald-700 tracking-widest">숲 속을 걷다</h1>
+          <p className="text-gray-400 text-sm">실시간 클라우드 저장이 활성화되었습니다.</p>
+          
+          <div className="space-y-4 pt-4">
+            <div className="text-left">
+              <label className="text-[10px] text-gray-400 ml-1 uppercase tracking-tighter">목표 글자수</label>
+              <input 
+                type="number" 
+                value={goal}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setGoal(val);
+                  syncToCloud(lines, currentText, val);
+                }}
+                className="w-full bg-gray-50 border-none rounded-xl p-4 text-center text-lg focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
+              />
             </div>
-            <button class="btn primary-btn" onclick="startJourney()">여정 시작</button>
-            <div id="continue-box" style="margin-top:10px; display:none;">
-                <button class="btn" style="background:var(--box-bg); color:var(--text); font-size: 0.8rem;" onclick="continueJourney()">이전 기록 이어가기</button>
-            </div>
+            <button 
+              onClick={handleStart}
+              className="w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+            >
+              {lines.length > 0 || currentText.length > 0 ? '여정 이어가기' : '새 여정 시작'}
+            </button>
+            {user && (
+              <p className="text-[10px] text-gray-300 select-none">ID: {user.uid}</p>
+            )}
+          </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-screen w-screen bg-white overflow-hidden font-serif" onClick={() => inputRef.current?.focus()}>
+      {/* Hidden Input */}
+      <textarea
+        ref={inputRef}
+        value={currentText}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        className="absolute inset-0 opacity-0 z-50 cursor-default resize-none outline-none"
+        spellCheck="false"
+      />
+
+      {/* Floating UI Controls */}
+      <div className="absolute top-6 left-6 z-40 opacity-10 hover:opacity-100 transition-opacity flex flex-col gap-4 bg-white/80 backdrop-blur p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-gray-400">글자 크기</span>
+          <input 
+            type="range" min="0.8" max="2.5" step="0.1" 
+            value={fontSize} 
+            onChange={(e) => setFontSize(parseFloat(e.target.value))}
+            className="w-32 accent-emerald-600 cursor-pointer"
+          />
+        </div>
+        <button 
+          onClick={() => setIsStarted(false)}
+          className="text-xs text-gray-500 hover:text-emerald-600 text-left transition-colors"
+        >
+          ← 목록으로
+        </button>
+      </div>
+
+      {/* Main Flow Engine */}
+      <div 
+        ref={containerRef}
+        className="absolute w-full transition-transform duration-500 ease-out flex flex-col items-center"
+      >
+        <div className="w-[85%] max-w-2xl space-y-6">
+          {lines.map((line, i) => (
+            <p 
+              key={i} 
+              className="text-gray-300 leading-relaxed break-words transition-all duration-700"
+              style={{ fontSize: `${fontSize}rem`, textAlign: 'center' }}
+            >
+              {line}
+            </p>
+          ))}
+          
+          <div 
+            ref={currentLineRef}
+            className="relative"
+            style={{ fontSize: `${fontSize}rem`, textAlign: 'center' }}
+          >
+            <span className="text-gray-800 leading-relaxed break-words min-h-[1.5em] inline-block">{currentText}</span>
+            <span className="inline-block w-[2px] h-[1.1em] bg-emerald-500 ml-1 animate-pulse align-middle" />
+          </div>
+          
+          {/* Spacer for bottom scrolling */}
+          <div className="h-[60vh]" />
+        </div>
+      </div>
+
+      {/* Bottom Info */}
+      <div className="absolute bottom-8 right-8 text-right pointer-events-none select-none">
+        <div className="text-3xl font-light text-emerald-900/20">{totalChars}</div>
+        <div className="text-[10px] uppercase tracking-widest text-emerald-900/30">/ {goal} 자</div>
+      </div>
+      
+      {totalChars >= goal && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40">
+          <div className="bg-emerald-600 text-white px-8 py-3 rounded-full font-bold shadow-xl animate-bounce">
+            목표 달성
+          </div>
+        </div>
+      )}
     </div>
+  );
+};
 
-    <!-- 좌측 제어판 (호버 시 나타남) -->
-    <div id="ui-controls" class="controls">
-        <div class="control-item">
-            <button class="btn" onclick="toggleTheme()" style="background:var(--box-bg); color:var(--text); font-size: 0.7rem; padding: 5px;">테마 전환</button>
-        </div>
-        <div class="control-item">
-            <span>목표 글자수 (직접 입력)</span>
-            <input type="number" id="live-goal" oninput="updateGoal(this.value)">
-        </div>
-        <div class="control-item">
-            <span>글자 크기</span>
-            <input type="range" min="0.8" max="2.0" step="0.1" id="fs-range" oninput="updateStyle('fontSize', this.value + 'rem')">
-        </div>
-    </div>
-
-    <!-- 메인 글쓰기 영역 -->
-    <div id="main-area" style="display:none;">
-        <div id="flow-engine" class="flow-container">
-            <div id="lines-area"></div>
-            <div id="current-line" class="line current"><span id="text-display"></span><span class="cursor" id="cursor-element"></span></div>
-            <div style="height: 50vh;"></div>
-        </div>
-        <div class="info-panel"><div id="goal-display">0 / 500 자</div></div>
-        <button id="finish-btn" class="finish-btn" onclick="showResults()">여정 마치기</button>
-        <textarea id="hidden-input" spellcheck="false"></textarea>
-    </div>
-
-    <!-- 결과 화면 -->
-    <div id="result-screen">
-        <div class="result-card">
-            <h2 style="color:var(--primary); font-size:1.5rem; margin-top:0;">기록 완료</h2>
-            <div id="final-stats" style="font-size: 0.85rem; margin-bottom:15px;"></div>
-            <div id="result-text-box" class="text-preview-box"></div>
-            <button class="btn primary-btn" onclick="saveAsFile()">텍스트 저장</button>
-            <div style="margin-top:15px; opacity:0.5; cursor:pointer; font-size:0.8rem;" onclick="location.reload()">다시 시작</div>
-        </div>
-    </div>
-
-    <script>
-        const STORAGE_KEY = 'FOREST_WALK_NOTION_V1';
-        const input = document.getElementById('hidden-input');
-        const textDisplay = document.getElementById('text-display');
-        const linesArea = document.getElementById('lines-area');
-        const flowEngine = document.getElementById('flow-engine');
-        const goalDisplay = document.getElementById('goal-display');
-        const finishBtn = document.getElementById('finish-btn');
-
-        let lines = [];
-        let currentText = "";
-        let config = { fontSize: '1.1rem', maxWidth: '100%', goal: 500, theme: 'light', textAlign: 'center' };
-        let startTime = null;
-
-        window.onload = () => {
-            const savedRaw = localStorage.getItem(STORAGE_KEY);
-            if (savedRaw) {
-                try {
-                    const saved = JSON.parse(savedRaw);
-                    if (saved && saved.lines && saved.lines.length > 0) {
-                        document.getElementById('continue-box').style.display = 'block';
-                    }
-                } catch (e) { console.error("Data error", e); }
-            }
-        };
-
-        function startJourney() {
-            config.goal = parseInt(document.getElementById('initial-goal').value) || 500;
-            initUI();
-        }
-
-        function continueJourney() {
-            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-            lines = saved.lines || [];
-            config = saved.config || config;
-            initUI();
-            lines.forEach(text => renderOldLine(text));
-        }
-
-        function initUI() {
-            document.getElementById('landing-screen').style.display = 'none';
-            document.getElementById('main-area').style.display = 'block';
-            document.getElementById('ui-controls').style.display = 'flex';
-            document.getElementById('live-goal').value = config.goal;
-            document.getElementById('fs-range').value = parseFloat(config.fontSize);
-            document.body.setAttribute('data-theme', config.theme);
-            startTime = Date.now();
-            applyStyles();
-            updateCharCount();
-            setTimeout(() => input.focus(), 100);
-        }
-
-        function updateStyle(prop, value) { 
-            config[prop] = value; 
-            applyStyles(); 
-            saveToLocal(); 
-            scrollToCenter(); 
-        }
-
-        function updateGoal(val) { 
-            const num = parseInt(val);
-            if (!isNaN(num)) {
-                config.goal = num; 
-                updateCharCount(); 
-                saveToLocal(); 
-            }
-        }
-
-        function applyStyles() {
-            document.querySelectorAll('.line').forEach(el => { 
-                el.style.fontSize = config.fontSize; 
-                el.style.textAlign = config.textAlign;
-            });
-            const cursorEl = document.getElementById('cursor-element');
-            if(cursorEl) cursorEl.style.height = config.fontSize;
-        }
-
-        function toggleTheme() {
-            config.theme = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-            document.body.setAttribute('data-theme', config.theme);
-            saveToLocal();
-        }
-
-        function renderOldLine(text) {
-            const newLine = document.createElement('div');
-            newLine.className = 'line old';
-            newLine.innerText = text;
-            newLine.style.fontSize = config.fontSize;
-            newLine.style.textAlign = config.textAlign;
-            linesArea.appendChild(newLine);
-        }
-
-        function updateCharCount() {
-            const total = lines.join('').length + currentText.length;
-            goalDisplay.innerText = `${total} / ${config.goal} 자`;
-            finishBtn.style.display = total >= config.goal ? 'block' : 'none';
-        }
-
-        function scrollToCenter() {
-            const currentLine = document.getElementById('current-line');
-            const centerPoint = currentLine.offsetTop + (currentLine.offsetHeight / 2);
-            flowEngine.style.transform = `translateY(${-centerPoint}px)`;
-        }
-
-        function saveToLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ lines, config })); }
-
-        input.addEventListener('input', (e) => {
-            currentText = e.target.value;
-            textDisplay.innerText = currentText;
-            updateCharCount();
-            scrollToCenter();
-        });
-
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                if (currentText.trim() === "" && currentText !== "") return;
-                renderOldLine(currentText);
-                lines.push(currentText);
-                currentText = ""; input.value = ""; textDisplay.innerText = "";
-                saveToLocal();
-                scrollToCenter();
-            }
-        });
-
-        function showResults() {
-            const total = lines.join('').length + currentText.length;
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            document.getElementById('final-stats').innerText = `${total}자 | ${Math.floor(elapsed/60)}분 ${elapsed%60}초`;
-            document.getElementById('result-text-box').innerText = lines.join('\n') + (currentText ? '\n' + currentText : '');
-            document.getElementById('result-screen').style.display = 'flex';
-        }
-
-        function saveAsFile() {
-            const content = lines.join('\n') + (currentText ? '\n' + currentText : '');
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `숲속기록_${new Date().toLocaleDateString()}.txt`;
-            link.click();
-        }
-
-        // 노션 위젯 클릭 시 포커스 유지
-        window.addEventListener('click', () => { 
-            if(document.getElementById('main-area').style.display !== 'none') input.focus(); 
-        });
-    </script>
-</body>
-</html>
+export default App;
