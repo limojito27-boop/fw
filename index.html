@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
-// Firebase Configuration
+// Firebase 설정 및 초기화
 const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -22,8 +22,9 @@ const App = () => {
   const inputRef = useRef(null);
   const containerRef = useRef(null);
   const currentLineRef = useRef(null);
+  const debounceTimer = useRef(null);
 
-  // 1. Authentication - RULE 3: Auth Before Queries
+  // 1. 인증 처리 개선 (로딩 상태 논리 오류 수정)
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -34,21 +35,21 @@ const App = () => {
         }
       } catch (error) {
         console.error("Auth error:", error);
+        setIsLoading(false); // 에러 시에도 로딩 해제
       }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      if (!u) setIsLoading(false);
+      setIsLoading(false); // 사용자 존재 여부와 상관없이 인증 프로세스 종료 시 로딩 해제
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. Data Synchronization (Cloud -> UI) - RULE 1: Strict Paths
+  // 2. 데이터 불러오기 (설정값 포함)
   useEffect(() => {
     if (!user) return;
 
-    // RULE 1: Path must be /artifacts/{appId}/users/{userId}/{collectionName}
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -56,45 +57,63 @@ const App = () => {
         const data = docSnap.data();
         setLines(data.lines || []);
         setGoal(data.goal || 500);
+        setFontSize(data.fontSize || 1.1); // 폰트 사이즈 보존 추가
         
-        // 작성 중일 때는 외부 업데이트(동기화)로 인해 텍스트가 덮어씌워지지 않도록 방지
-        if (!document.activeElement || document.activeElement !== inputRef.current) {
+        if (document.activeElement !== inputRef.current) {
           setCurrentText(data.currentText || "");
         }
       }
-      setIsLoading(false);
     }, (error) => {
       console.error("Firestore Read Error:", error);
-      setIsLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Data Persistence (UI -> Cloud) - Ensure async/await
-  const syncToCloud = async (updatedLines, updatedText, updatedGoal) => {
+  // 3. 디바운싱된 데이터 저장 (서버 부하 감소)
+  const syncToCloud = useCallback((updatedLines, updatedText, updatedGoal, updatedFontSize) => {
     if (!user) return;
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
-    try {
-      await setDoc(docRef, {
-        lines: updatedLines,
-        currentText: updatedText,
-        goal: updatedGoal,
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (error) {
-      console.error("Firestore Write Error:", error);
-    }
+    
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    
+    debounceTimer.current = setTimeout(async () => {
+      const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'writingData', 'currentSession');
+      try {
+        await setDoc(docRef, {
+          lines: updatedLines,
+          currentText: updatedText,
+          goal: updatedGoal,
+          fontSize: updatedFontSize,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+      } catch (error) {
+        console.error("Firestore Write Error:", error);
+      }
+    }, 500); // 500ms 디바운스 적용
+  }, [user]);
+
+  const downloadAsFile = () => {
+    const fullText = [...lines, currentText].join('\n');
+    const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    link.href = url;
+    link.download = `forest-walk-${timestamp}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  // 4. Scrolling Logic
+  // 4. 스크롤 연출 계산 개선
   useEffect(() => {
     if (isStarted && currentLineRef.current && containerRef.current) {
       const lineOffset = currentLineRef.current.offsetTop;
-      const containerHeight = window.innerHeight;
-      containerRef.current.style.transform = `translateY(${(containerHeight / 2) - lineOffset}px)`;
+      const viewportMid = window.innerHeight / 2;
+      // 상대적 위치 기반으로 계산하여 리사이즈 대응
+      containerRef.current.style.transform = `translateY(${viewportMid - lineOffset}px)`;
     }
-  }, [currentText, lines, isStarted]);
+  }, [currentText, lines, isStarted, fontSize]);
 
   const handleStart = () => {
     setIsStarted(true);
@@ -104,26 +123,32 @@ const App = () => {
   const handleInputChange = (e) => {
     const val = e.target.value;
     setCurrentText(val);
-    syncToCloud(lines, val, goal);
+    syncToCloud(lines, val, goal, fontSize);
   };
 
   const handleKeyDown = (e) => {
+    // 5. 한글 IME 입력 보호 (조합 중 엔터 처리 방지)
+    if (e.nativeEvent.isComposing) return;
+
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (currentText.trim() === "") return;
       const newLines = [...lines, currentText];
       setLines(newLines);
       setCurrentText("");
-      syncToCloud(newLines, "", goal);
+      syncToCloud(newLines, "", goal, fontSize);
     }
   };
 
-  const totalChars = lines.join('').length + currentText.length;
+  // 줄바꿈을 포함한 실제 문자수 계산
+  const totalChars = lines.join('\n').length + (lines.length > 0 && currentText ? 1 : 0) + currentText.length;
 
   if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-white text-gray-400 font-serif">
-        <p>기록을 안전하게 연결하는 중...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-emerald-100 border-t-emerald-600 rounded-full animate-spin" />
+          <p className="text-sm tracking-widest">여정을 준비하는 중...</p>
+        </div>
       </div>
     );
   }
@@ -133,7 +158,7 @@ const App = () => {
       <div className="flex h-screen w-screen flex-col items-center justify-center bg-white p-6 font-serif">
         <div className="max-w-xs w-full text-center space-y-8">
           <h1 className="text-3xl font-light text-emerald-700 tracking-widest">숲 속을 걷다</h1>
-          <p className="text-gray-400 text-sm">실시간 클라우드 저장이 활성화되었습니다.</p>
+          <p className="text-gray-400 text-sm leading-relaxed italic">"모든 글자는 당신의 발자국입니다."</p>
           
           <div className="space-y-4 pt-4">
             <div className="text-left">
@@ -144,7 +169,7 @@ const App = () => {
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setGoal(val);
-                  syncToCloud(lines, currentText, val);
+                  syncToCloud(lines, currentText, val, fontSize);
                 }}
                 className="w-full bg-gray-50 border-none rounded-xl p-4 text-center text-lg focus:ring-2 focus:ring-emerald-100 outline-none transition-all"
               />
@@ -155,8 +180,16 @@ const App = () => {
             >
               {lines.length > 0 || currentText.length > 0 ? '여정 이어가기' : '새 여정 시작'}
             </button>
+            <button 
+              onClick={downloadAsFile}
+              className="w-full bg-white text-emerald-600 border border-emerald-100 rounded-xl p-3 text-sm font-medium hover:bg-emerald-50 transition-all"
+            >
+              내 컴퓨터에 저장 (.txt)
+            </button>
             {user && (
-              <p className="text-[10px] text-gray-300 select-none">ID: {user.uid}</p>
+              <div className="pt-4 opacity-30 group">
+                 <p className="text-[9px] text-gray-300 select-none break-all group-hover:opacity-100 transition-opacity">ID: {user.uid}</p>
+              </div>
             )}
           </div>
         </div>
@@ -166,7 +199,6 @@ const App = () => {
 
   return (
     <div className="relative h-screen w-screen bg-white overflow-hidden font-serif" onClick={() => inputRef.current?.focus()}>
-      {/* Hidden Input */}
       <textarea
         ref={inputRef}
         value={currentText}
@@ -176,31 +208,41 @@ const App = () => {
         spellCheck="false"
       />
 
-      {/* Floating UI Controls */}
-      <div className="absolute top-6 left-6 z-40 opacity-10 hover:opacity-100 transition-opacity flex flex-col gap-4 bg-white/80 backdrop-blur p-4 rounded-2xl border border-gray-100 shadow-sm">
+      <div className="absolute top-6 left-6 z-40 opacity-10 hover:opacity-100 transition-all flex flex-col gap-4 bg-white/80 backdrop-blur p-4 rounded-2xl border border-gray-100 shadow-sm">
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] text-gray-400">글자 크기</span>
+          <span className="text-[10px] text-gray-400 font-sans font-bold">FONT SIZE</span>
           <input 
             type="range" min="0.8" max="2.5" step="0.1" 
             value={fontSize} 
-            onChange={(e) => setFontSize(parseFloat(e.target.value))}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setFontSize(val);
+              syncToCloud(lines, currentText, goal, val);
+            }}
             className="w-32 accent-emerald-600 cursor-pointer"
           />
         </div>
-        <button 
-          onClick={() => setIsStarted(false)}
-          className="text-xs text-gray-500 hover:text-emerald-600 text-left transition-colors"
-        >
-          ← 목록으로
-        </button>
+        <div className="flex flex-col gap-2 border-t pt-2">
+          <button 
+            onClick={downloadAsFile}
+            className="text-[11px] text-emerald-600 hover:font-bold text-left transition-all"
+          >
+            내보내기 (.txt)
+          </button>
+          <button 
+            onClick={() => setIsStarted(false)}
+            className="text-[11px] text-gray-400 hover:text-emerald-600 text-left transition-colors font-medium"
+          >
+            대시보드로 이동
+          </button>
+        </div>
       </div>
 
-      {/* Main Flow Engine */}
       <div 
         ref={containerRef}
-        className="absolute w-full transition-transform duration-500 ease-out flex flex-col items-center"
+        className="absolute w-full transition-transform duration-1000 ease-[cubic-bezier(0.2,0,0.2,1)] flex flex-col items-center"
       >
-        <div className="w-[85%] max-w-2xl space-y-6">
+        <div className="w-[85%] max-w-2xl space-y-8">
           {lines.map((line, i) => (
             <p 
               key={i} 
@@ -217,24 +259,26 @@ const App = () => {
             style={{ fontSize: `${fontSize}rem`, textAlign: 'center' }}
           >
             <span className="text-gray-800 leading-relaxed break-words min-h-[1.5em] inline-block">{currentText}</span>
-            <span className="inline-block w-[2px] h-[1.1em] bg-emerald-500 ml-1 animate-pulse align-middle" />
+            <span className={`inline-block w-[2px] h-[1.1em] bg-emerald-500 ml-1 align-middle ${!currentText && 'animate-pulse'}`} />
           </div>
           
-          {/* Spacer for bottom scrolling */}
           <div className="h-[60vh]" />
         </div>
       </div>
 
-      {/* Bottom Info */}
       <div className="absolute bottom-8 right-8 text-right pointer-events-none select-none">
-        <div className="text-3xl font-light text-emerald-900/20">{totalChars}</div>
-        <div className="text-[10px] uppercase tracking-widest text-emerald-900/30">/ {goal} 자</div>
+        <div className="text-4xl font-light text-emerald-900/10 tracking-tighter tabular-nums leading-none">
+          {totalChars}
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-900/20 mt-1">
+          PROGRESS / {goal}
+        </div>
       </div>
       
       {totalChars >= goal && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40">
-          <div className="bg-emerald-600 text-white px-8 py-3 rounded-full font-bold shadow-xl animate-bounce">
-            목표 달성
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+          <div className="bg-emerald-600/90 backdrop-blur text-white px-8 py-2 rounded-full text-xs font-bold shadow-2xl animate-bounce">
+            목표를 달성했습니다
           </div>
         </div>
       )}
