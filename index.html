@@ -7,8 +7,9 @@
     <link href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.1/RIDIBatang.css" rel="stylesheet">
     <style>
         :root { 
-            --bg: #fdfaf6; --text: #37352f; --accent: #000; --primary: #4eb08c; 
-            --card: #ffffff; --box-bg: #f1f1ef; --border: #ededeb;
+            --bg: #ffffff; /* 배경을 완전한 흰색으로 변경 */
+            --text: #37352f; --accent: #000; --primary: #4eb08c; 
+            --card: #ffffff; --box-bg: #f7f7f5; --border: #e9e9e6;
         }
         [data-theme='dark'] { 
             --bg: #191919; --text: #d3d3d3; --accent: #fff; --primary: #7bdcb5; 
@@ -22,7 +23,7 @@
             font-family: 'RIDIBatang', serif; 
         }
         
-        /* 노션 위젯 특화 스타일 - 스크롤바 숨김 */
+        /* 스크롤바 숨김 */
         ::-webkit-scrollbar { display: none; }
 
         /* 시작 화면 */
@@ -33,23 +34,23 @@
         }
         .landing-card { 
             background: var(--card); padding: 30px; border-radius: 20px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; 
+            box-shadow: 0 1px 10px rgba(0,0,0,0.05); text-align: center; 
             width: 85%; max-width: 320px; border: 1px solid var(--border);
         }
 
-        /* 제어판 (좌측 상단 플로팅) */
+        /* 제어판 */
         .controls { 
             position: fixed; top: 10px; left: 10px; z-index: 2000; 
             display: none; flex-direction: column; gap: 8px; 
-            opacity: 0.1; transition: 0.3s; background: var(--card); 
+            opacity: 0.05; transition: 0.3s; background: var(--card); 
             padding: 15px; border-radius: 12px; border: 1px solid var(--border);
-            width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         .controls:hover { opacity: 1; }
         .control-item { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; }
 
-        /* 입력 및 버튼 */
-        input[type="number"], input[type="text"] { 
+        /* 입력 폼 */
+        input[type="number"] { 
             padding: 8px; border-radius: 6px; border: 1px solid var(--border); 
             background: var(--box-bg); color: var(--text);
             font-family: inherit; font-size: 0.9rem; width: 100%; 
@@ -62,17 +63,17 @@
         }
         .primary-btn { background: var(--primary); color: white; font-size: 1rem; }
         
-        /* 글쓰기 영역 */
+        /* 글쓰기 엔진 */
         .flow-container { 
             position: absolute; width: 100%; top: 50%; 
-            transition: transform 0.4s cubic-bezier(0.17, 0.67, 0.83, 0.67); 
+            transition: transform 0.4s cubic-bezier(0.1, 0.5, 0.5, 1); 
             display: flex; flex-direction: column; align-items: center; 
         }
         .line { 
             line-height: 1.8; white-space: pre-wrap; word-wrap: break-word; 
             margin: 0.6rem 0; transition: all 0.4s; width: 85%; 
         }
-        .line.old { opacity: 0.2; filter: blur(0.8px); }
+        .line.old { opacity: 0.25; filter: blur(0.5px); }
         .line.current { opacity: 1; filter: blur(0px); color: var(--accent); position: relative; }
         
         .cursor { 
@@ -93,9 +94,9 @@
 
         .finish-btn { 
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
-            background: var(--primary); color: white; padding: 10px 25px; 
+            background: var(--primary); color: white; padding: 8px 20px; 
             border-radius: 20px; font-weight: bold; z-index: 2000; 
-            display: none; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(78, 176, 140, 0.3);
+            display: none; border: none; cursor: pointer;
         }
 
         /* 결과 화면 */
@@ -121,29 +122,33 @@
     <div id="landing-screen">
         <div class="landing-card">
             <h1 style="color:var(--primary); font-size: 1.8rem; margin: 0 0 10px 0;">숲 속을 걷다</h1>
-            <p style="opacity:0.7; font-size: 0.85rem; margin-bottom: 20px;">오늘의 목표 글자수</p>
+            <p style="opacity:0.7; font-size: 0.85rem; margin-bottom: 20px;">낮별 씨, 여정을 이어갈까요?</p>
             <div style="margin-bottom: 20px;">
-                <input type="number" id="initial-goal" value="500" placeholder="숫자 입력">
+                <label style="font-size: 0.7rem; display: block; margin-bottom: 5px;">목표 글자수</label>
+                <input type="number" id="initial-goal" value="500">
             </div>
-            <button class="btn primary-btn" onclick="startJourney()">여정 시작</button>
-            <div id="continue-box" style="margin-top:10px; display:none;">
-                <button class="btn" style="background:var(--box-bg); color:var(--text); font-size: 0.8rem;" onclick="continueJourney()">이전 기록 이어가기</button>
+            <button class="btn primary-btn" onclick="startJourney()">새 여정 시작</button>
+            <div id="continue-box" style="margin-top:12px; display:none;">
+                <button class="btn" style="background:#f1f1ef; color:#37352f; border: 1px solid #e9e9e6; font-size: 0.85rem;" onclick="continueJourney()">이전 기록 이어가기</button>
             </div>
         </div>
     </div>
 
-    <!-- 좌측 제어판 (호버 시 나타남) -->
+    <!-- 제어판 (좌측 상단 호버) -->
     <div id="ui-controls" class="controls">
         <div class="control-item">
-            <button class="btn" onclick="toggleTheme()" style="background:var(--box-bg); color:var(--text); font-size: 0.7rem; padding: 5px;">테마 전환</button>
+            <button class="btn" onclick="toggleTheme()" style="background:var(--box-bg); color:var(--text); font-size: 0.7rem; padding: 5px; border:1px solid var(--border);">테마 전환</button>
         </div>
         <div class="control-item">
-            <span>목표 글자수 (직접 입력)</span>
+            <span>목표 수정</span>
             <input type="number" id="live-goal" oninput="updateGoal(this.value)">
         </div>
         <div class="control-item">
             <span>글자 크기</span>
             <input type="range" min="0.8" max="2.0" step="0.1" id="fs-range" oninput="updateStyle('fontSize', this.value + 'rem')">
+        </div>
+        <div class="control-item">
+            <button class="btn" onclick="resetData()" style="background:#fff1f0; color:#ff4d4f; font-size: 0.7rem; margin-top:5px; border:1px solid #ffa39e;">기록 초기화</button>
         </div>
     </div>
 
@@ -165,13 +170,13 @@
             <h2 style="color:var(--primary); font-size:1.5rem; margin-top:0;">기록 완료</h2>
             <div id="final-stats" style="font-size: 0.85rem; margin-bottom:15px;"></div>
             <div id="result-text-box" class="text-preview-box"></div>
-            <button class="btn primary-btn" onclick="saveAsFile()">텍스트 저장</button>
-            <div style="margin-top:15px; opacity:0.5; cursor:pointer; font-size:0.8rem;" onclick="location.reload()">다시 시작</div>
+            <button class="btn primary-btn" onclick="saveAsFile()">텍스트 파일 저장</button>
+            <div style="margin-top:15px; opacity:0.5; cursor:pointer; font-size:0.8rem;" onclick="location.reload()">글쓰기로 돌아가기</div>
         </div>
     </div>
 
     <script>
-        const STORAGE_KEY = 'FOREST_WALK_NOTION_V1';
+        const STORAGE_KEY = 'FOREST_WALK_DATA_V2';
         const input = document.getElementById('hidden-input');
         const textDisplay = document.getElementById('text-display');
         const linesArea = document.getElementById('lines-area');
@@ -181,15 +186,16 @@
 
         let lines = [];
         let currentText = "";
-        let config = { fontSize: '1.1rem', maxWidth: '100%', goal: 500, theme: 'light', textAlign: 'center' };
+        let config = { fontSize: '1.1rem', goal: 500, theme: 'light', textAlign: 'center' };
         let startTime = null;
 
+        // 페이지 로드 시 기존 데이터 확인
         window.onload = () => {
             const savedRaw = localStorage.getItem(STORAGE_KEY);
             if (savedRaw) {
                 try {
                     const saved = JSON.parse(savedRaw);
-                    if (saved && saved.lines && saved.lines.length > 0) {
+                    if (saved && (saved.lines?.length > 0 || saved.currentText)) {
                         document.getElementById('continue-box').style.display = 'block';
                     }
                 } catch (e) { console.error("Data error", e); }
@@ -197,16 +203,29 @@
         };
 
         function startJourney() {
+            // 새로 시작 시 데이터 초기화 (컨트롤 초기값은 유지)
+            lines = [];
+            currentText = "";
             config.goal = parseInt(document.getElementById('initial-goal').value) || 500;
+            saveToLocal();
             initUI();
         }
 
         function continueJourney() {
             const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
             lines = saved.lines || [];
+            currentText = saved.currentText || "";
             config = saved.config || config;
+            
             initUI();
+            
+            // 기존 줄 렌더링
             lines.forEach(text => renderOldLine(text));
+            // 입력창에 진행중이던 텍스트 복구
+            input.value = currentText;
+            textDisplay.innerText = currentText;
+            updateCharCount();
+            scrollToCenter();
         }
 
         function initUI() {
@@ -274,22 +293,40 @@
             flowEngine.style.transform = `translateY(${-centerPoint}px)`;
         }
 
-        function saveToLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify({ lines, config })); }
+        function saveToLocal() { 
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+                lines, 
+                currentText,
+                config 
+            })); 
+        }
+
+        function resetData() {
+            if(confirm("모든 기록을 삭제하고 초기화할까요?")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
 
         input.addEventListener('input', (e) => {
             currentText = e.target.value;
             textDisplay.innerText = currentText;
             updateCharCount();
             scrollToCenter();
+            saveToLocal(); // 타이핑할 때마다 저장 (안전장치)
         });
 
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (currentText.trim() === "" && currentText !== "") return;
+                
                 renderOldLine(currentText);
                 lines.push(currentText);
-                currentText = ""; input.value = ""; textDisplay.innerText = "";
+                currentText = ""; 
+                input.value = ""; 
+                textDisplay.innerText = "";
+                
                 saveToLocal();
                 scrollToCenter();
             }
@@ -298,7 +335,7 @@
         function showResults() {
             const total = lines.join('').length + currentText.length;
             const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            document.getElementById('final-stats').innerText = `${total}자 | ${Math.floor(elapsed/60)}분 ${elapsed%60}초`;
+            document.getElementById('final-stats').innerText = `${total}자 작성 완료 | 약 ${Math.floor(elapsed/60)}분 소요`;
             document.getElementById('result-text-box').innerText = lines.join('\n') + (currentText ? '\n' + currentText : '');
             document.getElementById('result-screen').style.display = 'flex';
         }
@@ -312,9 +349,12 @@
             link.click();
         }
 
-        // 노션 위젯 클릭 시 포커스 유지
+        // 클릭 시 포커스
         window.addEventListener('click', () => { 
-            if(document.getElementById('main-area').style.display !== 'none') input.focus(); 
+            if(document.getElementById('main-area').style.display !== 'none' && 
+               document.getElementById('result-screen').style.display === 'none') {
+                input.focus(); 
+            }
         });
     </script>
 </body>
