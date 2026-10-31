@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WOMEN'S COSTUME CLOSET — 여성복 프롬프트 옷장</title>
+<style>
+  :root{
+    --bg:#faf8f5; --card:#ffffff; --ink:#2b2622; --sub:#8a7f74;
+    --line:#e8e1d8; --accent:#9a6b4f; --accent2:#5f7161; --chip:#f1ebe3;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif; overflow-x:hidden;}
+  header{padding:20px 14px 10px; text-align:center;}
+  header h1{margin:0; font-size:20px; letter-spacing:3px; font-weight:800;}
+  header p{margin:6px 0 0; font-size:11px; color:var(--sub); letter-spacing:1px;}
+  .toolbar{max-width:980px; margin:12px auto 0; padding:0 12px;}
+  .search{display:flex; gap:8px;}
+  .search input{flex:1; min-width:0; border:1px solid var(--line); border-radius:999px;
+    padding:10px 16px; font-size:14px; background:var(--card); outline:none;}
+  .search input:focus{border-color:var(--accent);}
+  .seasons{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; justify-content:center;}
+  .seasons button{border:1px solid var(--line); background:var(--card); color:var(--sub);
+    border-radius:999px; padding:8px 16px; font-size:12px; font-weight:700; cursor:pointer;}
+  .seasons button.on{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .count{max-width:980px; margin:10px auto 0; padding:0 14px; font-size:11px; color:var(--sub);}
+  .grid{max-width:980px; margin:8px auto 0; padding:0 10px 10px; display:grid;
+    grid-template-columns:repeat(2,1fr); gap:10px;}
+  @media(min-width:700px){.grid{grid-template-columns:repeat(3,1fr);}}
+  @media(min-width:960px){.grid{grid-template-columns:repeat(4,1fr);}}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:12px; display:flex; flex-direction:column; gap:8px; min-width:0;}
+  .card .meta{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .badge{font-size:10px; font-weight:800; padding:3px 8px; border-radius:999px; letter-spacing:1px;}
+  .badge.spring{background:#e9f3e4; color:#4c7a3f;}
+  .badge.summer{background:#e3f0f5; color:#2f6f8a;}
+  .badge.autumn{background:#f5ead9; color:#9a6b2f;}
+  .badge.winter{background:#e8e9f2; color:#4f5a8a;}
+  .cid{font-size:11px; font-weight:800; color:var(--ink); letter-spacing:1px;}
+  .style{font-size:10px; color:var(--sub);}
+  .noimg{width:100%; aspect-ratio:4/3; border-radius:10px; background:var(--chip);
+    display:flex; align-items:center; justify-content:center; color:#c4b8aa; font-size:11px; letter-spacing:2px;}
+  .preview{font-size:11px; line-height:1.55; color:#5c5248; word-break:break-word;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; min-height:3.1em;}
+  .btns{display:flex; gap:6px; margin-top:auto;}
+  .btns button{flex:1; border:none; border-radius:9px; padding:10px 4px; font-size:11px;
+    font-weight:800; cursor:pointer; min-height:38px;}
+  .b-rand{background:var(--chip); color:var(--accent);}
+  .b-copy{background:var(--ink); color:#fff;}
+  .b-det{background:#fff; border:1px solid var(--line) !important; color:var(--sub);}
+  .pager{display:flex; justify-content:center; align-items:center; gap:8px; padding:16px 0 40px;}
+  .pager button{border:1px solid var(--line); background:var(--card); border-radius:9px;
+    padding:9px 14px; font-size:12px; font-weight:800; cursor:pointer; color:var(--ink);}
+  .pager button:disabled{opacity:.35;}
+  .pager span{font-size:12px; color:var(--sub); font-weight:700;}
+  /* detail bottom sheet */
+  .sheet-bg{position:fixed; inset:0; background:rgba(40,32,25,.45); z-index:90; display:none;}
+  .sheet-bg.open{display:block;}
+  .sheet{position:fixed; left:0; right:0; bottom:0; z-index:100; background:var(--card);
+    border-radius:18px 18px 0 0; max-height:85vh; display:none; flex-direction:column;
+    box-shadow:0 -8px 30px rgba(0,0,0,.18);}
+  .sheet.open{display:flex;}
+  .sheet-head{display:flex; align-items:center; gap:8px; padding:14px 16px 10px;
+    border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  .sheet-head .x{margin-left:auto; border:none; background:var(--chip); border-radius:999px;
+    width:34px; height:34px; font-size:15px; cursor:pointer; color:var(--sub);}
+  .sheet-body{overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px 16px; flex:1; min-height:0;}
+  .piece{display:flex; flex-direction:column; gap:4px; padding:10px 0; border-bottom:1px dashed var(--line);}
+  .piece .lab{font-size:11px; font-weight:800; color:var(--sub);}
+  .piece .desc{font-size:12px; color:var(--ink); word-break:break-word;}
+  .piece select{width:100%; max-width:100%; border:1px solid var(--line); border-radius:8px;
+    padding:9px 10px; font-size:13px; background:#fff; color:var(--ink);}
+  .fullprompt{margin-top:12px; background:var(--chip); border-radius:10px; padding:12px;
+    font-size:12px; line-height:1.6; word-break:break-word; white-space:normal;}
+  .sheet-foot{display:flex; gap:8px; padding:12px 16px calc(14px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);}
+  .sheet-foot button{flex:1; border:none; border-radius:10px; padding:13px; font-size:13px;
+    font-weight:800; cursor:pointer; min-height:46px;}
+  /* toast + manual copy */
+  .toast{position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:var(--ink);
+    color:#fff; font-size:12px; font-weight:700; padding:10px 18px; border-radius:999px;
+    z-index:200; opacity:0; transition:opacity .2s; pointer-events:none; max-width:86vw; text-align:center;}
+  .toast.show{opacity:1;}
+  .manual-bg{position:fixed; inset:0; background:rgba(40,32,25,.5); z-index:210; display:none;
+    align-items:center; justify-content:center; padding:20px;}
+  .manual-bg.open{display:flex;}
+  .manual{background:#fff; border-radius:14px; padding:16px; width:100%; max-width:420px;}
+  .manual p{margin:0 0 8px; font-size:12px; color:var(--sub);}
+  .manual textarea{width:100%; height:120px; border:1px solid var(--line); border-radius:9px;
+    padding:10px; font-size:12px; resize:none;}
+  .manual button{margin-top:10px; width:100%; border:none; background:var(--ink); color:#fff;
+    border-radius:9px; padding:12px; font-size:13px; font-weight:800; cursor:pointer;}
+</style>
+</head>
+<body>
+<header>
+  <h1>WOMEN'S COSTUME CLOSET</h1>
+  <p>여성복 완성 코디 프롬프트 옷장 · 색상 자유 변경</p>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <input id="searchInput" type="search" placeholder="키워드 또는 ID 검색 (예: linen, SP-03, 오피스)" autocomplete="off">
+  </div>
+  <div class="seasons" id="seasonTabs"></div>
+</div>
+
+<div class="count" id="countText"></div>
+<div class="grid" id="grid"></div>
+
+<div class="pager">
+  <button id="prevBtn">◀ 이전</button>
+  <span id="pageText"></span>
+  <button id="nextBtn">다음 ▶</button>
+</div>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-head">
+    <span class="badge" id="shBadge"></span>
+    <span class="cid" id="shId"></span>
+    <span class="style" id="shStyle"></span>
+    <button class="x" id="shClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+  <div class="sheet-foot">
+    <button class="b-rand" id="shRand">🎲 색상 랜덤</button>
+    <button class="b-copy" id="shCopy">📋 프롬프트 복사</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="manual-bg" id="manualBg">
+  <div class="manual">
+    <p>자동 복사가 차단되었습니다. 아래 내용을 길게 눌러 직접 복사하세요.</p>
+    <textarea id="manualText" readonly></textarea>
+    <button id="manualClose">닫기</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ========== 코디 데이터 ==========
+   각 코디는 고유 ID를 가지며 pieces(의상 구성)는 고정, 색상만 가변.
+   t: 프롬프트 템플릿({c}=색상 자리), colors 비어있으면 고정 색/무색 아이템. */
+const OUTFITS = [
+/* ---------- SPRING ---------- */
+{id:"SP-01", season:"spring", style:"캐주얼",
+ pieces:[
+  {k:"셔츠", t:"{c} cotton oxford button up shirt", colors:["white","light blue","ivory","pale yellow"]},
+  {k:"팬츠", t:"{c} straight cotton chino trousers", colors:["beige","khaki","navy","cream"]},
+  {k:"재킷", t:"{c} relaxed single breasted cotton blazer", colors:["beige","light grey","soft brown"]},
+  {k:"신발", t:"{c} low top leather sneakers", colors:["white","cream","light grey"]},
+  {k:"양말", t:"{c} ribbed cotton socks", colors:["ivory","white","grey"]},
+  {k:"가방", t:"{c} plain leather messenger bag", colors:["beige","brown","black"]}]},
+{id:"SP-02", season:"spring", style:"로맨틱",
+ pieces:[
+  {k:"블라우스", t:"{c} puff sleeve cotton blouse with square neckline", colors:["white","blush pink","cream","lavender"]},
+  {k:"스커트", t:"{c} tiered midi skirt in soft crepe", colors:["dusty pink","ivory","sage green","light grey"]},
+  {k:"가디건", t:"{c} cropped knit cardigan with small round buttons", colors:["cream","pale pink","mint"]},
+  {k:"신발", t:"{c} leather mary jane flats", colors:["black","ivory","soft brown"]},
+  {k:"가방", t:"{c} small top handle bag with rounded flap", colors:["cream","dusty pink","tan"]},
+  {k:"액세서리", t:"small pearl drop earrings", colors:[]}]},
+{id:"SP-03", season:"spring", style:"프레피",
+ pieces:[
+  {k:"셔츠", t:"white pointed collar cotton shirt", colors:[]},
+  {k:"니트", t:"{c} cable knit cotton vest", colors:["navy","forest green","burgundy","mustard"]},
+  {k:"스커트", t:"{c} pleated wool blend tennis skirt", colors:["navy","grey","dark green"]},
+  {k:"신발", t:"{c} leather penny loafers", colors:["dark brown","black","burgundy"]},
+  {k:"양말", t:"{c} ribbed knee high socks", colors:["white","navy","grey"]},
+  {k:"가방", t:"{c} structured leather satchel bag", colors:["brown","black","tan"]}]},
+{id:"SP-04", season:"spring", style:"미니멀",
+ pieces:[
+  {k:"티셔츠", t:"{c} boxy fit heavyweight cotton t-shirt", colors:["white","light grey","black","sand"]},
+  {k:"팬츠", t:"{c} wide leg tailored trousers with front pleats", colors:["charcoal","beige","black","grey"]},
+  {k:"신발", t:"{c} minimal leather slip on shoes", colors:["white","black","grey"]},
+  {k:"가방", t:"{c} large soft leather tote bag", colors:["black","taupe","ivory"]},
+  {k:"액세서리", t:"thin silver bangle bracelet", colors:[]}]},
+{id:"SP-05", season:"spring", style:"오피스",
+ pieces:[
+  {k:"블라우스", t:"{c} silk-touch blouse with concealed placket", colors:["ivory","powder blue","light grey","white"]},
+  {k:"슬랙스", t:"{c} slim straight ankle length slacks", colors:["black","navy","grey","beige"]},
+  {k:"재킷", t:"{c} fitted collarless tweed-free wool jacket", colors:["light grey","navy","beige"]},
+  {k:"신발", t:"{c} pointed toe low heel pumps", colors:["black","nude beige","navy"]},
+  {k:"가방", t:"{c} structured leather briefcase style bag", colors:["black","dark brown","taupe"]},
+  {k:"액세서리", t:"slim metal wristwatch with leather strap", colors:[]}]},
+{id:"SP-06", season:"spring", style:"스트리트",
+ pieces:[
+  {k:"후디", t:"{c} oversized cotton fleece hoodie", colors:["grey","black","washed blue","cream"]},
+  {k:"팬츠", t:"{c} loose fit straight denim jeans", colors:["light wash blue","mid blue","black","grey"]},
+  {k:"아우터", t:"{c} boxy nylon coach jacket", colors:["black","navy","olive"]},
+  {k:"신발", t:"{c} chunky sole high top sneakers", colors:["white","black","grey"]},
+  {k:"가방", t:"{c} nylon crossbody sling bag", colors:["black","grey","olive"]},
+  {k:"액세서리", t:"{c} cotton twill baseball cap", colors:["black","navy","beige"]}]},
+{id:"SP-07", season:"spring", style:"빈티지",
+ pieces:[
+  {k:"블라우스", t:"{c} rounded collar cotton blouse with front tucks", colors:["ivory","dusty blue","pale olive"]},
+  {k:"스커트", t:"{c} high waisted A-line corduroy midi skirt", colors:["camel","brick red","olive","brown"]},
+  {k:"가디건", t:"{c} relaxed lambswool cardigan with wooden buttons", colors:["oatmeal","brown","moss green"]},
+  {k:"신발", t:"{c} leather T-strap low heels", colors:["dark brown","black","oxblood"]},
+  {k:"양말", t:"{c} sheer ankle socks", colors:["ivory","beige"]},
+  {k:"가방", t:"{c} vintage style leather frame handbag", colors:["brown","black","tan"]}]},
+{id:"SP-08", season:"spring", style:"스포티",
+ pieces:[
+  {k:"집업", t:"{c} slim zip up track jacket with contrast piping", colors:["navy","red","black","green"]},
+  {k:"탑", t:"{c} fitted cotton crew neck t-shirt", colors:["white","grey","black"]},
+  {k:"팬츠", t:"{c} tapered jersey track pants", colors:["navy","black","grey"]},
+  {k:"신발", t:"{c} lightweight running sneakers", colors:["white","silver grey","black"]},
+  {k:"가방", t:"{c} compact nylon backpack", colors:["black","navy","grey"]}]},
+{id:"SP-09", season:"spring", style:"페미닌",
+ pieces:[
+  {k:"원피스", t:"{c} belted shirt dress in crisp cotton with midi length", colors:["sky blue","ivory","soft yellow","sage"]},
+  {k:"아우터", t:"{c} short collarless cotton jacket", colors:["white","beige","light blue"]},
+  {k:"신발", t:"{c} slingback low heel shoes", colors:["nude beige","white","black"]},
+  {k:"가방", t:"{c} woven leather shoulder bag", colors:["tan","cream","brown"]},
+  {k:"액세서리", t:"thin gold chain necklace", colors:[]}]},
+{id:"SP-10", season:"spring", style:"매니시",
+ pieces:[
+  {k:"셔츠", t:"{c} oversized cotton poplin shirt with dropped shoulders", colors:["white","light blue","grey stripe"]},
+  {k:"팬츠", t:"{c} relaxed straight wool blend trousers with cuffed hems", colors:["grey","charcoal","brown"]},
+  {k:"베스트", t:"{c} tailored wool suit vest", colors:["charcoal","grey","dark brown"]},
+  {k:"신발", t:"{c} leather derby shoes", colors:["black","dark brown"]},
+  {k:"양말", t:"{c} fine ribbed dress socks", colors:["charcoal","black","grey"]},
+  {k:"가방", t:"{c} slim leather portfolio bag", colors:["black","brown"]}]},
+
+/* ---------- SUMMER ---------- */
+{id:"SU-01", season:"summer", style:"캐주얼",
+ pieces:[
+  {k:"셔츠", t:"{c} short sleeve linen camp collar shirt", colors:["white","sage green","light blue","sand"]},
+  {k:"쇼츠", t:"{c} relaxed cotton bermuda shorts", colors:["beige","navy","white","olive"]},
+  {k:"신발", t:"{c} canvas slip on sneakers", colors:["white","navy","natural"]},
+  {k:"가방", t:"{c} canvas tote bag with leather handles", colors:["natural","navy","olive"]},
+  {k:"액세서리", t:"{c} woven straw bucket hat", colors:["natural","beige"]}]},
+{id:"SU-02", season:"summer", style:"페미닌",
+ pieces:[
+  {k:"원피스", t:"{c} sleeveless linen midi dress with A-line silhouette and side pockets", colors:["ivory","terracotta","dusty blue","olive"]},
+  {k:"신발", t:"{c} flat leather ankle strap sandals", colors:["tan","white","black"]},
+  {k:"가방", t:"{c} woven rattan basket bag", colors:["natural","brown"]},
+  {k:"액세서리", t:"thin gold hoop earrings", colors:[]}]},
+{id:"SU-03", season:"summer", style:"미니멀",
+ pieces:[
+  {k:"탑", t:"{c} sleeveless mock neck knit top", colors:["white","black","grey","sand"]},
+  {k:"팬츠", t:"{c} wide leg linen blend trousers", colors:["ivory","black","light grey","beige"]},
+  {k:"신발", t:"{c} square toe leather mule sandals", colors:["black","white","taupe"]},
+  {k:"가방", t:"{c} small structured leather shoulder bag", colors:["black","cream","tan"]}]},
+{id:"SU-04", season:"summer", style:"스트리트",
+ pieces:[
+  {k:"티셔츠", t:"{c} oversized graphic-free heavyweight cotton t-shirt", colors:["white","black","washed grey","faded blue"]},
+  {k:"쇼츠", t:"{c} loose fit denim shorts with raw hem", colors:["light wash blue","black","mid blue"]},
+  {k:"신발", t:"{c} retro low top skate sneakers", colors:["white","black","navy"]},
+  {k:"양말", t:"{c} crew length sports socks", colors:["white","black"]},
+  {k:"가방", t:"{c} nylon mini crossbody bag", colors:["black","grey","lime"]},
+  {k:"액세서리", t:"{c} cotton bucket hat", colors:["black","beige","navy"]}]},
+{id:"SU-05", season:"summer", style:"오피스",
+ pieces:[
+  {k:"블라우스", t:"{c} short sleeve blouse with notched collar in breathable crepe", colors:["white","powder blue","light grey","ivory"]},
+  {k:"스커트", t:"{c} straight midi skirt with back slit", colors:["black","navy","beige","grey"]},
+  {k:"신발", t:"{c} open toe block heel sandals", colors:["nude beige","black","white"]},
+  {k:"가방", t:"{c} medium leather handbag with top zip", colors:["black","taupe","cream"]},
+  {k:"액세서리", t:"slim silver wristwatch", colors:[]}]},
+{id:"SU-06", season:"summer", style:"리조트",
+ pieces:[
+  {k:"셔츠", t:"{c} oversized sheer-free cotton gauze shirt worn open", colors:["white","sky blue","peach"]},
+  {k:"이너", t:"{c} ribbed cotton tank top", colors:["white","black","sand"]},
+  {k:"팬츠", t:"{c} drawstring wide linen pants", colors:["ivory","sage","light blue"]},
+  {k:"신발", t:"{c} espadrille flat sandals", colors:["natural","navy","white"]},
+  {k:"가방", t:"{c} large mesh beach tote bag", colors:["natural","white","blue"]}]},
+{id:"SU-07", season:"summer", style:"스포티",
+ pieces:[
+  {k:"탑", t:"{c} sleeveless performance knit top", colors:["white","black","mint","grey"]},
+  {k:"스커트", t:"{c} pleated tennis skort", colors:["white","navy","black"]},
+  {k:"아우터", t:"{c} lightweight windbreaker tied around waist", colors:["navy","silver grey","green"]},
+  {k:"신발", t:"{c} cushioned court sneakers", colors:["white","grey"]},
+  {k:"양말", t:"{c} low cut ankle socks", colors:["white","grey"]},
+  {k:"가방", t:"{c} small nylon duffel bag", colors:["navy","black","grey"]}]},
+{id:"SU-08", season:"summer", style:"빈티지",
+ pieces:[
+  {k:"블라우스", t:"{c} short puff sleeve blouse with shirred bodice", colors:["ivory","dusty rose","pale olive"]},
+  {k:"팬츠", t:"{c} high waisted wide leg cotton twill pants with sailor buttons", colors:["navy","cream","brick red"]},
+  {k:"신발", t:"{c} leather fisherman sandals", colors:["brown","black","tan"]},
+  {k:"가방", t:"{c} canvas and leather saddle bag", colors:["beige","olive","brown"]},
+  {k:"액세서리", t:"{c} silk-free cotton bandana tied on bag handle", colors:["red","navy","mustard"]}]},
+{id:"SU-09", season:"summer", style:"모던",
+ pieces:[
+  {k:"원피스", t:"{c} column midi dress in structured cotton with boat neckline", colors:["black","white","charcoal","deep green"]},
+  {k:"신발", t:"{c} minimal leather slide sandals", colors:["black","white","tan"]},
+  {k:"가방", t:"{c} rigid rectangular leather crossbody bag", colors:["black","ivory","brown"]},
+  {k:"액세서리", t:"wide silver cuff bracelet", colors:[]}]},
+{id:"SU-10", season:"summer", style:"매니시",
+ pieces:[
+  {k:"셔츠", t:"{c} boxy short sleeve seersucker shirt", colors:["light blue stripe","white","grey stripe"]},
+  {k:"팬츠", t:"{c} pleated wide cotton trousers", colors:["beige","grey","navy"]},
+  {k:"신발", t:"{c} leather loafers worn without socks", colors:["dark brown","black"]},
+  {k:"가방", t:"{c} soft leather flat briefcase", colors:["tan","black","brown"]},
+  {k:"액세서리", t:"{c} acetate frame sunglasses", colors:["black","tortoise brown"]}]},
+
+/* ---------- AUTUMN ---------- */
+{id:"AU-01", season:"autumn", style:"클래식",
+ pieces:[
+  {k:"니트", t:"{c} fine merino wool turtleneck sweater", colors:["camel","ivory","charcoal","burgundy"]},
+  {k:"스커트", t:"{c} wool blend pencil midi skirt", colors:["grey","camel","black","brown"]},
+  {k:"코트", t:"{c} double breasted trench coat with belt", colors:["beige","khaki","black"]},
+  {k:"신발", t:"{c} leather knee high boots with low heel", colors:["dark brown","black"]},
+  {k:"가방", t:"{c} structured leather top handle bag", colors:["brown","black","burgundy"]},
+  {k:"액세서리", t:"{c} fine wool square scarf", colors:["camel","grey","burgundy"]}]},
+{id:"AU-02", season:"autumn", style:"캐주얼",
+ pieces:[
+  {k:"니트", t:"{c} oversized cable knit crew neck sweater", colors:["oatmeal","forest green","rust","grey"]},
+  {k:"팬츠", t:"{c} straight leg rigid denim jeans", colors:["indigo blue","mid blue","black"]},
+  {k:"신발", t:"{c} suede desert boots", colors:["sand","dark brown","grey"]},
+  {k:"양말", t:"{c} thick wool blend socks", colors:["ivory","mustard","grey"]},
+  {k:"가방", t:"{c} canvas backpack with leather trims", colors:["olive","navy","beige"]}]},
+{id:"AU-03", season:"autumn", style:"빈티지",
+ pieces:[
+  {k:"블라우스", t:"{c} high neck blouse with covered buttons", colors:["ivory","dusty rose","olive"]},
+  {k:"스커트", t:"{c} checked wool A-line midi skirt", colors:["brown check","grey check","green check"]},
+  {k:"아우터", t:"{c} cropped wool jacket with patch pockets", colors:["brown","moss green","rust"]},
+  {k:"신발", t:"{c} lace up leather ankle boots", colors:["dark brown","black","oxblood"]},
+  {k:"양말", t:"{c} ribbed wool tights", colors:["brown","charcoal","forest green"]},
+  {k:"가방", t:"{c} vintage style leather doctor bag", colors:["brown","black"]}]},
+{id:"AU-04", season:"autumn", style:"오피스",
+ pieces:[
+  {k:"니트", t:"{c} slim fit v-neck knit sweater", colors:["grey","navy","black","beige"]},
+  {k:"셔츠", t:"white cotton shirt layered under sweater with collar out", colors:[]},
+  {k:"슬랙스", t:"{c} tailored straight wool trousers", colors:["charcoal","black","grey","brown"]},
+  {k:"코트", t:"{c} single breasted wool chesterfield coat", colors:["camel","charcoal","navy"]},
+  {k:"신발", t:"{c} leather block heel ankle boots", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} large leather work tote bag", colors:["black","taupe","brown"]}]},
+{id:"AU-05", season:"autumn", style:"스트리트",
+ pieces:[
+  {k:"후디", t:"{c} oversized fleece hoodie layered under jacket", colors:["grey","black","cream","brown"]},
+  {k:"팬츠", t:"{c} wide leg cargo pants with flap pockets", colors:["olive","black","charcoal","beige"]},
+  {k:"아우터", t:"{c} boxy corduroy trucker jacket", colors:["brown","camel","charcoal"]},
+  {k:"신발", t:"{c} chunky sole leather sneakers", colors:["white","black"]},
+  {k:"가방", t:"{c} utility nylon shoulder bag with buckles", colors:["black","olive","grey"]},
+  {k:"액세서리", t:"{c} knit beanie", colors:["black","grey","rust"]}]},
+{id:"AU-06", season:"autumn", style:"로맨틱",
+ pieces:[
+  {k:"원피스", t:"{c} long sleeve midi dress in soft corduroy with gathered waist", colors:["dusty rose","mustard","moss green","brown"]},
+  {k:"가디건", t:"{c} long open front knit cardigan", colors:["oatmeal","brown","grey"]},
+  {k:"신발", t:"{c} round toe mary jane heels", colors:["black","burgundy","brown"]},
+  {k:"양말", t:"{c} opaque tights", colors:["black","charcoal","brown"]},
+  {k:"가방", t:"{c} small suede shoulder bag with chain strap", colors:["brown","black","taupe"]}]},
+{id:"AU-07", season:"autumn", style:"미니멀",
+ pieces:[
+  {k:"니트", t:"{c} boxy drop shoulder wool knit sweater", colors:["ivory","grey","black","taupe"]},
+  {k:"팬츠", t:"{c} barrel leg cropped trousers", colors:["black","charcoal","cream"]},
+  {k:"코트", t:"{c} collarless cocoon wool coat", colors:["grey","black","oatmeal"]},
+  {k:"신발", t:"{c} leather chelsea boots with flat sole", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} oversized soft leather clutch bag", colors:["black","taupe"]}]},
+{id:"AU-08", season:"autumn", style:"프레피",
+ pieces:[
+  {k:"셔츠", t:"{c} button down oxford shirt", colors:["white","light blue","striped blue"]},
+  {k:"니트", t:"{c} argyle pattern knit vest", colors:["navy","forest green","burgundy"]},
+  {k:"팬츠", t:"{c} cuffed wool herringbone trousers", colors:["grey","brown","charcoal"]},
+  {k:"아우터", t:"{c} wool varsity jacket with ribbed trims", colors:["navy","dark green","burgundy"]},
+  {k:"신발", t:"{c} leather tassel loafers", colors:["dark brown","black"]},
+  {k:"가방", t:"{c} canvas book tote with leather straps", colors:["navy","beige","green"]}]},
+{id:"AU-09", season:"autumn", style:"매니시",
+ pieces:[
+  {k:"셔츠", t:"{c} brushed cotton flannel shirt", colors:["brown check","grey check","green check"]},
+  {k:"티셔츠", t:"white cotton t-shirt layered under shirt", colors:[]},
+  {k:"팬츠", t:"{c} loose straight corduroy trousers", colors:["camel","dark brown","olive"]},
+  {k:"신발", t:"{c} leather work boots with lug sole", colors:["dark brown","black"]},
+  {k:"양말", t:"{c} heavy ribbed socks", colors:["grey","ivory"]},
+  {k:"가방", t:"{c} waxed canvas messenger bag", colors:["olive","brown","navy"]}]},
+{id:"AU-10", season:"autumn", style:"모던",
+ pieces:[
+  {k:"탑", t:"{c} fitted fine knit mock neck top", colors:["black","ivory","grey","wine"]},
+  {k:"스커트", t:"{c} faux leather A-line midi skirt", colors:["black","dark brown","burgundy"]},
+  {k:"아우터", t:"{c} oversized blazer with strong shoulders", colors:["charcoal","black","grey check"]},
+  {k:"신발", t:"{c} pointed toe ankle boots with sculpted heel", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} geometric structured leather handbag", colors:["black","ivory","taupe"]}]},
+
+/* ---------- WINTER ---------- */
+{id:"WI-01", season:"winter", style:"클래식",
+ pieces:[
+  {k:"니트", t:"{c} thick ribbed turtleneck wool sweater", colors:["ivory","camel","charcoal","forest green"]},
+  {k:"팬츠", t:"{c} wide leg wool flannel trousers", colors:["grey","charcoal","brown"]},
+  {k:"코트", t:"{c} long double faced wool coat with shawl collar", colors:["camel","black","grey"]},
+  {k:"신발", t:"{c} leather ankle boots with almond toe", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} structured leather shoulder bag with gold clasp", colors:["black","burgundy","brown"]},
+  {k:"액세서리", t:"{c} chunky wool muffler", colors:["ivory","camel","grey"]}]},
+{id:"WI-02", season:"winter", style:"캐주얼",
+ pieces:[
+  {k:"니트", t:"{c} fair isle pattern wool sweater", colors:["ivory","navy","red","grey"]},
+  {k:"팬츠", t:"{c} straight leg thick denim jeans", colors:["dark indigo","black","mid blue"]},
+  {k:"아우터", t:"{c} hooded duck down puffer jacket", colors:["black","olive","navy","cream"]},
+  {k:"신발", t:"{c} suede winter boots with shearling lining", colors:["sand","dark brown","black"]},
+  {k:"양말", t:"{c} thick wool socks", colors:["ivory","grey","red"]},
+  {k:"가방", t:"{c} padded nylon tote bag", colors:["black","grey","olive"]},
+  {k:"액세서리", t:"{c} ribbed knit beanie", colors:["ivory","grey","navy"]}]},
+{id:"WI-03", season:"winter", style:"페미닌",
+ pieces:[
+  {k:"원피스", t:"{c} long sleeve knit midi dress with ribbed texture", colors:["ivory","dusty pink","grey","wine"]},
+  {k:"코트", t:"{c} wool wrap coat with waist belt", colors:["camel","grey","black"]},
+  {k:"신발", t:"{c} suede knee high boots", colors:["dark brown","black","taupe"]},
+  {k:"양말", t:"{c} opaque wool tights", colors:["black","charcoal"]},
+  {k:"가방", t:"{c} small quilted leather chain bag", colors:["black","cream","burgundy"]},
+  {k:"액세서리", t:"{c} soft wool beret", colors:["black","camel","wine"]}]},
+{id:"WI-04", season:"winter", style:"스트리트",
+ pieces:[
+  {k:"후디", t:"{c} heavyweight oversized hoodie", colors:["black","grey","cream","brown"]},
+  {k:"팬츠", t:"{c} baggy fleece lined jogger pants", colors:["black","grey","charcoal"]},
+  {k:"아우터", t:"{c} oversized boxy down parka with big pockets", colors:["black","olive","silver grey"]},
+  {k:"신발", t:"{c} chunky high top winter sneakers", colors:["black","white","grey"]},
+  {k:"가방", t:"{c} large nylon messenger bag with straps", colors:["black","grey"]},
+  {k:"액세서리", t:"{c} fleece neck warmer", colors:["black","grey","olive"]}]},
+{id:"WI-05", season:"winter", style:"오피스",
+ pieces:[
+  {k:"니트", t:"{c} fine gauge turtleneck layered under jacket", colors:["black","ivory","grey","navy"]},
+  {k:"슬랙스", t:"{c} tailored wool blend trousers with center crease", colors:["charcoal","black","grey"]},
+  {k:"재킷", t:"{c} double breasted wool blazer", colors:["charcoal","navy","grey check"]},
+  {k:"코트", t:"{c} long single breasted wool overcoat", colors:["black","camel","grey"]},
+  {k:"신발", t:"{c} leather heeled ankle boots", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} large structured leather tote", colors:["black","taupe","burgundy"]}]},
+{id:"WI-06", season:"winter", style:"빈티지",
+ pieces:[
+  {k:"니트", t:"{c} nordic pattern wool cardigan with metal buttons", colors:["ivory","grey","navy"]},
+  {k:"블라우스", t:"{c} high neck blouse with small frill collar", colors:["ivory","dusty blue"]},
+  {k:"스커트", t:"{c} long pleated wool skirt", colors:["brown","charcoal","forest green"]},
+  {k:"신발", t:"{c} lace up heeled leather boots", colors:["dark brown","black"]},
+  {k:"양말", t:"{c} cable knit tights", colors:["charcoal","brown"]},
+  {k:"가방", t:"{c} tapestry-free carpet style handbag in wool fabric", colors:["brown","deep green","burgundy"]}]},
+{id:"WI-07", season:"winter", style:"미니멀",
+ pieces:[
+  {k:"니트", t:"{c} oversized cashmere blend crew neck sweater", colors:["oatmeal","grey","black","ivory"]},
+  {k:"팬츠", t:"{c} straight leg wool trousers with raw hem", colors:["black","charcoal","cream"]},
+  {k:"코트", t:"{c} maxi length padded coat with clean lines", colors:["black","silver grey","ivory"]},
+  {k:"신발", t:"{c} minimal leather ankle boots with square toe", colors:["black","taupe"]},
+  {k:"가방", t:"{c} soft oversized leather hobo bag", colors:["black","grey","taupe"]}]},
+{id:"WI-08", season:"winter", style:"프레피",
+ pieces:[
+  {k:"니트", t:"{c} lambswool crew neck sweater", colors:["burgundy","navy","forest green","mustard"]},
+  {k:"셔츠", t:"white oxford shirt with collar out", colors:[]},
+  {k:"스커트", t:"{c} tartan check pleated midi skirt", colors:["red tartan","green tartan","navy tartan"]},
+  {k:"코트", t:"{c} wool duffle coat with toggle buttons and hood", colors:["navy","camel","grey"]},
+  {k:"신발", t:"{c} leather loafers with lug sole", colors:["black","dark brown"]},
+  {k:"양말", t:"{c} ribbed wool knee socks", colors:["navy","grey","ivory"]},
+  {k:"가방", t:"{c} leather flap satchel", colors:["brown","black"]}]},
+{id:"WI-09", season:"winter", style:"모던",
+ pieces:[
+  {k:"탑", t:"{c} sleek zip up knit top with high collar", colors:["black","grey","deep green"]},
+  {k:"팬츠", t:"{c} slim bootcut stretch wool pants", colors:["black","charcoal"]},
+  {k:"코트", t:"{c} belted long shearling-free faux leather coat", colors:["black","dark brown"]},
+  {k:"신발", t:"{c} pointed heeled long boots", colors:["black","dark brown"]},
+  {k:"가방", t:"{c} rigid mini top handle bag", colors:["black","ivory","wine"]},
+  {k:"액세서리", t:"{c} leather gloves", colors:["black","dark brown","burgundy"]}]},
+{id:"WI-10", season:"winter", style:"스포티",
+ pieces:[
+  {k:"탑", t:"{c} half zip fleece pullover", colors:["cream","grey","navy","pink"]},
+  {k:"이너", t:"{c} thermal base layer top", colors:["white","black","grey"]},
+  {k:"팬츠", t:"{c} tapered padded winter pants", colors:["black","charcoal","navy"]},
+  {k:"신발", t:"{c} waterproof trail sneakers", colors:["black","grey","white"]},
+  {k:"양말", t:"{c} cushioned wool hiking socks", colors:["grey","ivory","navy"]},
+  {k:"가방", t:"{c} technical nylon backpack with chest strap", colors:["black","navy","olive"]},
+  {k:"액세서리", t:"{c} knit headband ear warmer", colors:["grey","cream","black"]}]}
+];
+
+const SEASON_KO = {all:"전체", spring:"봄", summer:"여름", autumn:"가을", winter:"겨울"};
+const PER_PAGE = 12;
+
+/* ===== 상태: 코디별 색상 선택은 ID 키로 독립 저장 (데이터 혼합 방지) ===== */
+const colorState = {}; // {outfitId: [colorIndex or -1 per piece]}
+function initColors(){
+  OUTFITS.forEach(o=>{
+    colorState[o.id] = o.pieces.map(p=> p.colors.length ? Math.floor(Math.random()*p.colors.length) : -1);
+  });
+}
+function randomizeColors(id){
+  const o = OUTFITS.find(x=>x.id===id);
+  colorState[id] = o.pieces.map(p=> p.colors.length ? Math.floor(Math.random()*p.colors.length) : -1);
+}
+function pieceText(outfit, i){
+  const p = outfit.pieces[i];
+  const idx = colorState[outfit.id][i];
+  return p.colors.length ? p.t.replace("{c}", p.colors[idx]) : p.t;
+}
+function buildPrompt(outfit){
+  return outfit.pieces.map((_,i)=>pieceText(outfit,i)).join(", ");
+}
+
+/* ===== 목록/필터/페이지 ===== */
+let curSeason = "all", curPage = 1, curQuery = "";
+function filtered(){
+  const q = curQuery.trim().toLowerCase();
+  return OUTFITS.filter(o=>{
+    if(curSeason!=="all" && o.season!==curSeason) return false;
+    if(!q) return true;
+    const hay = (o.id+" "+o.style+" "+SEASON_KO[o.season]+" "+o.pieces.map(p=>p.t+" "+p.k).join(" ")).toLowerCase();
+    return hay.includes(q);
+  });
+}
+function render(){
+  const list = filtered();
+  const pages = Math.max(1, Math.ceil(list.length/PER_PAGE));
+  if(curPage>pages) curPage = pages;
+  const slice = list.slice((curPage-1)*PER_PAGE, curPage*PER_PAGE);
+
+  document.getElementById("countText").textContent =
+    `${SEASON_KO[curSeason]} ${list.length}개 코디`;
+
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  slice.forEach(o=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.id = o.id;
+    card.innerHTML = `
+      <div class="meta">
+        <span class="badge ${o.season}">${SEASON_KO[o.season]}</span>
+        <span class="cid">${o.id}</span>
+        <span class="style">${o.style}</span>
+      </div>
+      <div class="noimg">NO IMAGE</div>
+      <div class="preview"></div>
+      <div class="btns">
+        <button class="b-rand">🎲 랜덤</button>
+        <button class="b-det">상세</button>
+        <button class="b-copy">복사</button>
+      </div>`;
+    card.querySelector(".preview").textContent = buildPrompt(o);
+    card.querySelector(".b-rand").addEventListener("click", ()=>{
+      randomizeColors(o.id);
+      card.querySelector(".preview").textContent = buildPrompt(o);
+      if(sheetOpenId===o.id) renderSheetBody(o);
+    });
+    card.querySelector(".b-copy").addEventListener("click", ()=>copyPrompt(o));
+    card.querySelector(".b-det").addEventListener("click", ()=>openSheet(o.id));
+    grid.appendChild(card);
+  });
+
+  document.getElementById("pageText").textContent = `${curPage} / ${pages}`;
+  document.getElementById("prevBtn").disabled = curPage<=1;
+  document.getElementById("nextBtn").disabled = curPage>=pages;
+}
+function refreshCard(id){
+  const card = document.querySelector(`.card[data-id="${id}"]`);
+  if(card){
+    const o = OUTFITS.find(x=>x.id===id);
+    card.querySelector(".preview").textContent = buildPrompt(o);
+  }
+}
+
+/* ===== 상세 바텀시트 ===== */
+let sheetOpenId = null;
+function openSheet(id){
+  const o = OUTFITS.find(x=>x.id===id);
+  sheetOpenId = id;
+  const b = document.getElementById("shBadge");
+  b.className = "badge "+o.season;
+  b.textContent = SEASON_KO[o.season];
+  document.getElementById("shId").textContent = o.id;
+  document.getElementById("shStyle").textContent = o.style;
+  renderSheetBody(o);
+  document.getElementById("sheetBg").classList.add("open");
+  document.getElementById("sheet").classList.add("open");
+}
+function closeSheet(){
+  sheetOpenId = null;
+  document.getElementById("sheetBg").classList.remove("open");
+  document.getElementById("sheet").classList.remove("open");
+}
+function renderSheetBody(o){
+  const body = document.getElementById("sheetBody");
+  body.innerHTML = "";
+  o.pieces.forEach((p,i)=>{
+    const div = document.createElement("div");
+    div.className = "piece";
+    const lab = document.createElement("div");
+    lab.className = "lab"; lab.textContent = p.k;
+    const desc = document.createElement("div");
+    desc.className = "desc"; desc.textContent = pieceText(o,i);
+    div.appendChild(lab); div.appendChild(desc);
+    if(p.colors.length){
+      const sel = document.createElement("select");
+      p.colors.forEach((c,ci)=>{
+        const op = document.createElement("option");
+        op.value = ci; op.textContent = c;
+        if(ci===colorState[o.id][i]) op.selected = true;
+        sel.appendChild(op);
+      });
+      sel.addEventListener("change", ()=>{
+        colorState[o.id][i] = Number(sel.value);
+        desc.textContent = pieceText(o,i);
+        fp.textContent = buildPrompt(o);
+        refreshCard(o.id);
+      });
+      div.appendChild(sel);
+    }
+    body.appendChild(div);
+  });
+  const fp = document.createElement("div");
+  fp.className = "fullprompt";
+  fp.textContent = buildPrompt(o);
+  body.appendChild(fp);
+}
+
+/* ===== 복사 (모바일 대응: Clipboard API → execCommand → 수동) ===== */
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("show"), 1800);
+}
+function legacyCopy(text){
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.left = "-9999px"; ta.style.top = "0";
+  ta.setAttribute("readonly","");
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+function showManual(text){
+  const ta = document.getElementById("manualText");
+  ta.value = text;
+  document.getElementById("manualBg").classList.add("open");
+  setTimeout(()=>{ ta.focus(); ta.select(); }, 50);
+}
+async function copyPrompt(outfit){
+  const text = buildPrompt(outfit); // 복사 시점의 현재 색상으로 생성
+  let done = false;
+  if(navigator.clipboard && window.isSecureContext){
+    try{ await navigator.clipboard.writeText(text); done = true; }catch(e){ done = false; }
+  }
+  if(!done) done = legacyCopy(text);
+  if(done) toast(`${outfit.id} 프롬프트 복사 완료`);
+  else showManual(text);
+}
+
+/* ===== 이벤트 바인딩 ===== */
+function buildSeasonTabs(){
+  const wrap = document.getElementById("seasonTabs");
+  ["all","spring","summer","autumn","winter"].forEach(s=>{
+    const btn = document.createElement("button");
+    btn.textContent = SEASON_KO[s];
+    btn.dataset.season = s;
+    if(s===curSeason) btn.classList.add("on");
+    btn.addEventListener("click", ()=>{
+      curSeason = s; curPage = 1;
+      wrap.querySelectorAll("button").forEach(b=>b.classList.toggle("on", b===btn));
+      render();
+    });
+    wrap.appendChild(btn);
+  });
+}
+document.getElementById("searchInput").addEventListener("input", e=>{
+  curQuery = e.target.value; curPage = 1; render();
+});
+document.getElementById("prevBtn").addEventListener("click", ()=>{ curPage--; render(); });
+document.getElementById("nextBtn").addEventListener("click", ()=>{ curPage++; render(); });
+document.getElementById("shClose").addEventListener("click", closeSheet);
+document.getElementById("sheetBg").addEventListener("click", closeSheet);
+document.getElementById("shRand").addEventListener("click", ()=>{
+  if(!sheetOpenId) return;
+  randomizeColors(sheetOpenId);
+  renderSheetBody(OUTFITS.find(x=>x.id===sheetOpenId));
+  refreshCard(sheetOpenId);
+});
+document.getElementById("shCopy").addEventListener("click", ()=>{
+  if(!sheetOpenId) return;
+  copyPrompt(OUTFITS.find(x=>x.id===sheetOpenId));
+});
+document.getElementById("manualClose").addEventListener("click", ()=>{
+  document.getElementById("manualBg").classList.remove("open");
+});
+
+/* ===== 초기화: 새로고침 시 기본 색상 랜덤 ===== */
+initColors();
+buildSeasonTabs();
+render();
+</script>
+</body>
+</html>
